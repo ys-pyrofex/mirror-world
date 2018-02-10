@@ -5,7 +5,7 @@ import scala.collection.mutable
 package object mirror_world {
 
   type Channel             = String
-  type ProduceCandidate    = (Channel, Int)
+  type ProduceCandidate    = Channel
   type ConsumeCandidate[A] = (A, Int)
   type Continuation[A]     = (List[A]) => Unit
   type Env[A]              = Map[String, A]

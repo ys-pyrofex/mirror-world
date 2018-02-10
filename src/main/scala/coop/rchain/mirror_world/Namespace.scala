@@ -18,12 +18,7 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
     }
 
   def consumeProducts(channels: List[Channel], chosenCandidates: List[ConsumeCandidate[A]]): List[A] =
-    for ((candidate, candidateIndex) <- chosenCandidates.zipWithIndex) yield {
-      val (datum, datumIndex) = candidate
-      val channel: String     = channels(candidateIndex)
-      tupleSpace.get(singleton(channel)).foreach((subspace: Subspace[A]) => ignore { subspace.removeDataAtIndex(datumIndex) })
-      datum
-    }
+    chosenCandidates.map(candidate => candidate._1)
 
   def storeWaitingContinuation(channels: List[Channel], patterns: List[Pattern], k: Continuation[A]): Unit = {
     val waitingContinuation: WaitingContinuation[A] = WaitingContinuation[A](patterns, k)
@@ -48,25 +43,14 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
                              channelPosition: Int,
                              productPatterns: Seq[Pattern]): List[ProduceCandidate] =
     candidateChannels.zipWithIndex[Channel, List[(Channel, Int)]].flatMap {
-      case (candidateChannel, candidateChannelIndex) =>
-        if (channelPosition === candidateChannelIndex)
-          singleton((candidateChannel, -1))
-        else
-          Nil
-      // tupleSpace
-      //   .get(singleton(candidateChannel))
-      //   .map { (subspace: Subspace[A]) =>
-      //     subspace.data
-      //       .zipWithIndex[A, List[(A, Int)]]
-      //       .filter { case (datum, _) => productPatterns.lift(candidateChannelIndex).exists(_.isMatch(datum)) }
-      //       .map { case (_, datumIndex) => (candidateChannel, datumIndex) }
-      //   }
-      //   .toList
-      //   .flatten
+      case (candidateChannel, candidateChannelIndex) if channelPosition === candidateChannelIndex =>
+        singleton(candidateChannel)
+      case _ =>
+        Nil
     }
 
-  def matchCont(waitingK: WaitingContinuation[A], candidateChannelPosition: Int, channel: String): Boolean =
-    waitingK.patterns.lift(candidateChannelPosition).exists(_.isMatch(channel))
+  def matchesAt(patterns: List[Pattern], candidateChannelPosition: Int, channel: String): Boolean =
+    patterns.lift(candidateChannelPosition).exists(_.isMatch(channel))
 
   def extractConsumeCandidates(keyCandidates: List[List[Channel]],
                                channel: String): List[(List[ProduceCandidate], (List[Channel], Int))] = {
@@ -74,7 +58,7 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
       candidateChannel         <- keyCandidates
       candidateChannelPosition <- candidateChannel.indexOf(channel).pure[List]
       subspace                 <- tupleSpace.get(candidateChannel).toList
-      (k, ki)                  <- subspace.waitingContinuations.zipWithIndex if matchCont(k, candidateChannelPosition, channel)
+      (k, ki)                  <- subspace.waitingContinuations.zipWithIndex if matchesAt(k.patterns, candidateChannelPosition, channel)
       produceCandidates = fetchProduceCandidates(candidateChannel, candidateChannelPosition, k.patterns) if produceCandidates.nonEmpty
     } yield {
       (produceCandidates, (candidateChannel, ki))
@@ -85,12 +69,7 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
                           product: A): Option[(WaitingContinuation[A], List[A])] =
     chosenCandidate match {
       case (produceCandidates, (candidateChannelKey, waitingContinuationIndex)) =>
-        val products: List[A] = produceCandidates.flatMap {
-          case (_, dataIndex) if dataIndex === -1 =>
-            product.pure[List]
-          case (produceChannel, dataIndex) =>
-            tupleSpace.get(singleton(produceChannel)).flatMap(s => s.removeDataAtIndex(dataIndex)).toList
-        }
+        val products: List[A] = produceCandidates.map(_ => product)
         tupleSpace
           .get(candidateChannelKey)
           .flatMap(_.removeWaitingContinuationAtIndex(waitingContinuationIndex))

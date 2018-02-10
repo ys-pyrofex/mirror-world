@@ -1,23 +1,26 @@
 package coop.rchain.mirror_world
 
 import coop.rchain.mirror_world.{ignore => ign}
-import org.scalatest._
+import org.scalatest.{FlatSpec, Matchers, OptionValues}
 
 import scala.collection.mutable
 
-@SuppressWarnings(Array("org.wartremover.warts.MutableDataStructures"))
-class NamespaceTest extends FlatSpec {
+@SuppressWarnings(Array("org.wartremover.warts.MutableDataStructures", "org.wartremover.warts.NonUnitStatements"))
+class NamespaceTest extends FlatSpec with Matchers with OptionValues {
 
-  "produce" should "persist a piece of data in the tuplespace" in {
+  def dataAt[A](ns: Namespace[A], channels: List[Channel]): Option[List[A]] =
+    ns.tupleSpace.get(channels).map(_.data)
+
+  "produce" should "work" in {
 
     val ns: Namespace[String] = new Namespace(mutable.Map.empty)
 
     ns.produce("helloworld", "world")
 
-    assert(ns.tupleSpace.get(singleton("helloworld")).map(_.data).contains(List("world")))
+    dataAt(ns, singleton("helloworld")).value shouldBe List("world")
   }
 
-  "produce followed consume" should "cause the persisted data to be handed to the given continuation" in {
+  "produce, consume" should "work" in {
 
     val ns: Namespace[String]                     = new Namespace(mutable.Map.empty)
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
@@ -25,10 +28,36 @@ class NamespaceTest extends FlatSpec {
     ns.produce("helloworld", "world")
     ns.consume(List("helloworld"), List(Wildcard), as => ign(results += as))
 
-    assert(List(List("world")) === results.toList)
+    dataAt(ns, singleton("helloworld")).value shouldBe List("world")
+    results.toList shouldBe List(List("world"))
   }
 
-  "consume on multiple channels followed by produce" should "work" in {
+  "produce, produce" should "work" in {
+
+    val ns: Namespace[String] = new Namespace(mutable.Map.empty)
+
+    ns.produce("helloworld", "world")
+    ns.produce("helloworld", "quux")
+
+    dataAt(ns, singleton("helloworld")).value shouldBe List("quux", "world")
+  }
+
+  "produce, produce, consume" should "work" in {
+
+    val ns: Namespace[String]                     = new Namespace(mutable.Map.empty)
+    val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
+
+    ns.produce("helloworld", "world")
+    ns.produce("helloworld", "quux")
+    ns.produce("helloworld", "bar")
+    ns.produce("helloworld", "baz")
+    ns.consume(List("helloworld"), List(Wildcard), as => ign(results += as))
+
+    dataAt(ns, singleton("helloworld")).value shouldBe List("baz", "bar", "quux", "world")
+    results.toList shouldBe List(List("baz", "bar", "quux", "world"))
+  }
+
+  "consume on multiple channels, produce" should "work" in {
 
     val ns: Namespace[String]                     = new Namespace(mutable.Map.empty)
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
@@ -36,10 +65,11 @@ class NamespaceTest extends FlatSpec {
     ns.consume(List("helloworld", "quux"), List(Wildcard, Wildcard), as => ign(results += as))
     ns.produce("quux", "Hello World")
 
-    assert(List(List("Hello World")) === results.toList)
+    dataAt(ns, List("helloworld", "quux")).value shouldBe List()
+    results.toList shouldBe List(List("Hello World"))
   }
 
-  "consume on multiple channels followed by consume on a same channel followed by produce" should "work" in {
+  "consume on multiple channels, consume on a same channel, produce" should "work" in {
 
     val ns: Namespace[String]                      = new Namespace(mutable.Map.empty)
     val results1: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
@@ -49,10 +79,13 @@ class NamespaceTest extends FlatSpec {
     ns.consume(List("quux"), List(Wildcard), as => ign(results2 += as))
     ns.produce("quux", "Hello World")
 
-    assert(List(List("Hello World")) === results1.toList && List(List("Hello World")) === results2.toList)
+    dataAt(ns, List("helloworld", "quux")).value shouldBe List()
+    dataAt(ns, List("quux")).value shouldBe List()
+    results1.toList shouldBe List(List("Hello World"))
+    results2.toList shouldBe List(List("Hello World"))
   }
 
-  "two consumes on a single channel followed by produce" should "work" in {
+  "two consumes on a single channel, produce" should "work" in {
 
     val ns: Namespace[String]                     = new Namespace(mutable.Map.empty)
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
@@ -62,7 +95,8 @@ class NamespaceTest extends FlatSpec {
     ns.produce(channel = "helloworld", product = "Hello World")
     ns.produce(channel = "helloworld", product = "Hello World")
 
-    assert(List(List("Hello World"), List("Hello World")) === results.toList)
+    dataAt(ns, singleton("helloworld")).value shouldBe List()
+    results.toList shouldBe List(List("Hello World"), List("Hello World"))
   }
 
   "the hello world example" should "work" in {
@@ -81,6 +115,7 @@ class NamespaceTest extends FlatSpec {
 
     test(testConsumer(as => ign(results += as)))
 
-    assert(List(List("Hello World")) === results.toList)
+    dataAt(ns, singleton("helloworld")).value shouldBe List()
+    results.toList shouldBe List(List("Hello World"))
   }
 }
