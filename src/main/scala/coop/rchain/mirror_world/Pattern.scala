@@ -1,4 +1,4 @@
-package coop.rchain.shitheap
+package coop.rchain.mirror_world
 
 @SuppressWarnings(Array("org.wartremover.warts.Equals"))
 class Pattern(pattern: String) {

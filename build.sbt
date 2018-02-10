@@ -63,14 +63,13 @@ lazy val commonSettingsDependencies = Seq(
   libraryDependencies ++= Seq(
     compilerPlugin("org.wartremover" %% "wartremover" % "2.1.1"),
     "ch.qos.logback"  % "logback-classic" % "1.2.3",
-    "com.novocode"    % "junit-interface" % "0.11" % "test",
     "org.log4s"      %% "log4s"           % "1.4.0",
     "org.scalatest"  %% "scalatest"       % "3.0.4" % "test",
     "org.typelevel"  %% "cats-core"       % "1.0.1"
   )
 )
 
-lazy val shitheap = (project in file("."))
+lazy val mirrorWorld = (project in file("."))
   .settings(commonSettings: _*)
   .settings(commonSettingsDependencies: _*)
-  .settings(name := "shitheap")
+  .settings(name := "mirror-world")

@@ -1,4 +1,4 @@
-package coop.rchain.shitheap
+package coop.rchain.mirror_world
 
 import cats.implicits._
 

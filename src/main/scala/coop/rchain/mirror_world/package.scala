@@ -4,7 +4,7 @@ import cats.implicits._
 
 import scala.collection.mutable
 
-package object shitheap {
+package object mirror_world {
 
   type Persistent          = Boolean
   type Channel             = String
