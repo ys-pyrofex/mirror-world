@@ -11,7 +11,7 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
   def dataAt[A](ns: Namespace[A], channels: List[Channel]): Option[List[A]] =
     ns.tupleSpace.get(channels).map(_.data)
 
-  def capture[A](res: mutable.ListBuffer[A])(as: A): Unit = ign(res += as)
+  def capture[A](res: mutable.ListBuffer[List[A]]): Continuation[A] = (as: List[A]) => ign(res += as)
 
   "produce" should "work" in {
 

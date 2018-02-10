@@ -6,7 +6,7 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
 
   /* Consume */
 
-  def extractDataCandidates(channels: List[Channel], patterns: List[Pattern]): List[ConsumeCandidate[A]] =
+  def extractDataCandidates(channels: List[Channel], patterns: List[Pattern]): List[A] =
     channels.zipWithIndex.flatMap {
       case (channel, channelIndex) =>
         tupleSpace
@@ -17,6 +17,7 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
           }
           .toList
           .flatten
+          .map(_._1)
     }
 
   def storeWaitingContinuation(channels: List[Channel], patterns: List[Pattern], k: Continuation[A]): Unit = {
@@ -31,19 +32,19 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
 
   def consume(channels: List[Channel], patterns: List[Pattern], k: Continuation[A]): Unit = {
     val chosenCandidates = extractDataCandidates(channels, patterns)
-    if (chosenCandidates.nonEmpty) {
-      k(chosenCandidates.map(_._1))
-    } else {
+    if (chosenCandidates.isEmpty) {
       storeWaitingContinuation(channels, patterns, k)
+    } else {
+      k(chosenCandidates)
     }
   }
 
   /* Produce */
 
-  def matchesAt(patterns: List[Pattern], candidateChannelPosition: Int, channel: String): Boolean =
+  def matchesAt(patterns: List[Pattern], candidateChannelPosition: Int, channel: Channel): Boolean =
     patterns.lift(candidateChannelPosition).exists(_.isMatch(channel))
 
-  def extractProduceCandidates(keyCandidates: List[List[Channel]], channel: String): List[(List[Channel], Int)] =
+  def extractProduceCandidates(keyCandidates: List[List[Channel]], channel: Channel): List[(List[Channel], Int)] =
     for {
       candidateChannel         <- keyCandidates
       candidateChannelPosition <- candidateChannel.indexOf(channel).pure[List]
@@ -66,7 +67,7 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
       case Some(s) =>
         ignore { s.appendData(product) }
       case None =>
-        ignore { tupleSpace.put(List(channel), Subspace.empty[A].appendData(product)) }
+        ignore { tupleSpace.put(singleton(channel), Subspace.empty[A].appendData(product)) }
     }
 
   def produce(channel: Channel, product: A): Unit = {

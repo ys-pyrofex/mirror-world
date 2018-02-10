@@ -4,12 +4,9 @@ import scala.collection.mutable
 
 package object mirror_world {
 
-  type Channel             = String
-  type ProduceCandidate    = Channel
-  type ConsumeCandidate[A] = (A, Int)
-  type Continuation[A]     = (List[A]) => Unit
-  type Env[A]              = Map[String, A]
-  type Tuplespace[A]       = mutable.Map[List[Channel], Subspace[A]]
+  type Channel         = String
+  type Continuation[A] = (List[A]) => Unit
+  type Tuplespace[A]   = mutable.Map[List[Channel], Subspace[A]]
 
   def ignore[A](a: => A): Unit = {
     val _: A = a
