@@ -11,7 +11,7 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
   type Continuation[A] = (Seq[A]) => Unit
 
   def dataAt[A, K](ns: Namespace[A, K], channels: Seq[Channel]): Option[Seq[A]] =
-    ns.tupleSpace.get(channels).map(_.data)
+    ns.tuplespace.get(channels).map(_.data)
 
   def capture[A](res: mutable.ListBuffer[Seq[A]]): Continuation[A] = (as: Seq[A]) => ign(res += as)
 
