@@ -35,5 +35,5 @@ class Subspace[A](_data: mutable.ListBuffer[A], _waitingContinuations: mutable.L
 object Subspace {
 
   def empty[A]: Subspace[A] =
-    new Subspace[A](mutable.ListBuffer.empty[A], mutable.ListBuffer.empty[WaitingContinuation[A]])
+    new Subspace(mutable.ListBuffer.empty[A], mutable.ListBuffer.empty[WaitingContinuation[A]])
 }

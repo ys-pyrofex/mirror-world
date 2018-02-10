@@ -54,7 +54,7 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
       (candidateChannel, ki)
     }
 
-  def consumeContinuation(chosenCandidate: (List[Channel], Int)): Option[WaitingContinuation[A]] =
+  def getContinuation(chosenCandidate: (List[Channel], Int)): Option[WaitingContinuation[A]] =
     chosenCandidate match {
       case (channels, waitingContinuationIndex) =>
         tupleSpace
@@ -71,13 +71,13 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
     }
 
   def produce(channel: Channel, product: A): Unit = {
-    val candidates = tupleSpace.keys.toList.filter(_.exists(_.contains(channel)))
-    val consumers  = extractProduceCandidates(candidates, channel)
-    val dewers     = consumers.flatMap(consumer => consumeContinuation(consumer).toList)
-    if (dewers.nonEmpty) {
-      for (consumedK <- dewers) consumedK.k(singleton(product))
-    } else {
+    val keyCandidates        = tupleSpace.keys.toList.filter(_.exists(_.contains(channel)))
+    val produceCandidates    = extractProduceCandidates(keyCandidates, channel)
+    val waitingContinuations = produceCandidates.flatMap(chosen => getContinuation(chosen).toList)
+    if (waitingContinuations.isEmpty) {
       storeProduct(channel, product)
+    } else {
+      for (waitingK <- waitingContinuations) waitingK.k(singleton(product))
     }
   }
 }
