@@ -53,16 +53,16 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
           singleton((candidateChannel, -1))
         else
           Nil
-          // tupleSpace
-          //   .get(singleton(candidateChannel))
-          //   .map { (subspace: Subspace[A]) =>
-          //     subspace.data
-          //       .zipWithIndex[A, List[(A, Int)]]
-          //       .filter { case (datum, _) => productPatterns.lift(candidateChannelIndex).exists(_.isMatch(datum)) }
-          //       .map { case (_, datumIndex) => (candidateChannel, datumIndex) }
-          //   }
-          //   .toList
-          //   .flatten
+      // tupleSpace
+      //   .get(singleton(candidateChannel))
+      //   .map { (subspace: Subspace[A]) =>
+      //     subspace.data
+      //       .zipWithIndex[A, List[(A, Int)]]
+      //       .filter { case (datum, _) => productPatterns.lift(candidateChannelIndex).exists(_.isMatch(datum)) }
+      //       .map { case (_, datumIndex) => (candidateChannel, datumIndex) }
+      //   }
+      //   .toList
+      //   .flatten
     }
 
   def matchCont(waitingK: WaitingContinuation[A], candidateChannelPosition: Int, channel: String): Boolean =
@@ -87,7 +87,7 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
       case (produceCandidates, (candidateChannelKey, waitingContinuationIndex)) =>
         val products: List[A] = produceCandidates.flatMap {
           case (_, dataIndex) if dataIndex === -1 =>
-            Some(product).toList
+            product.pure[List]
           case (produceChannel, dataIndex) =>
             tupleSpace.get(singleton(produceChannel)).flatMap(s => s.removeDataAtIndex(dataIndex)).toList
         }
