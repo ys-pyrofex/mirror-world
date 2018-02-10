@@ -12,7 +12,7 @@ class Subspace[A](_data: mutable.ListBuffer[A], _waitingContinuations: mutable.L
 
   def removeWaitingContinuationAtIndex(index: Int): Option[WaitingContinuation[A]] =
     _waitingContinuations.lift(index).map { (k: WaitingContinuation[A]) =>
-      ignore { _data.remove(index) }
+      ignore { _waitingContinuations.remove(index) }
       k
     }
 

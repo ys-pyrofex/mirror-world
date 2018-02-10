@@ -69,24 +69,26 @@ class Namespace[A](t: Tuplespace[A]) {
             .flatten
     }
 
-  def extractConsumeCandidates(candidateChannelsKey: List[Channel],
+
+  def extractConsumeCandidates(candidateChannelsKey: List[List[Channel]],
                                channel: String,
-                               product: Any): List[(List[ProduceCandidate], (String, Int))] = {
+                               product: Any): List[(List[ProduceCandidate], (List[Channel], Int))] = {
     for {
       candidateChannelKey <- candidateChannelsKey
-      candidateChannel = List(candidateChannelKey)
+      candidateChannel = candidateChannelKey
       channelPosition  = candidateChannel.indexOf(channel)
-      subspace                        <- t.get(candidateChannel).toList
+      subspace                        <- t.get(candidateChannelKey).toList
       (waitingCont, waitingContIndex) <- subspace.waitingContinuations.zipWithIndex
-      if waitingCont.patterns.lift(channelPosition).exists(_.isMatch(product))
-      produceCandidates = fetchProduceCandidates(List(candidateChannelKey), channelPosition, waitingCont.patterns)
+      if reachAroundGet(waitingCont.patterns, channelPosition).exists(_.isMatch(product))
+      produceCandidates = fetchProduceCandidates(candidateChannelKey, channelPosition, waitingCont.patterns)
       if produceCandidates.nonEmpty
     } yield {
       (produceCandidates, (candidateChannelKey, waitingContIndex))
     }
   }
 
-  def consumeContinuation(chosenCandidate: (List[ProduceCandidate], (String, Int)), product: A): Option[(WaitingContinuation[A], List[A])] =
+  def consumeContinuation(chosenCandidate: (List[ProduceCandidate], (List[Channel], Int)),
+                          product: A): Option[(WaitingContinuation[A], List[A])] =
     chosenCandidate match {
       case (produceCandidates, (candidateChannelKey, waitingContinuationIndex)) =>
         val products: List[A] = produceCandidates.flatMap {
@@ -95,7 +97,7 @@ class Namespace[A](t: Tuplespace[A]) {
           case (produceChannel, dataIndex) =>
             t.get(List(produceChannel)).flatMap(s => s.removeDataAtIndex(dataIndex)).toList
         }
-        t.get(List(candidateChannelKey))
+        t.get(candidateChannelKey)
           .flatMap(_.removeWaitingContinuationAtIndex(waitingContinuationIndex))
           .map((value: WaitingContinuation[A]) => (value, products))
     }
@@ -110,10 +112,10 @@ class Namespace[A](t: Tuplespace[A]) {
 
   @SuppressWarnings(Array("org.wartremover.warts.Var"))
   def produce(channel: Channel, product: A): Unit = {
-    var candidateChannelsKey = List.empty[Channel]
+    var candidateChannelsKey = List.empty[List[Channel]]
     for (key <- t.keys) {
       if (key.exists(_.contains(channel)))
-        candidateChannelsKey = candidateChannelsKey ++ key
+        candidateChannelsKey = candidateChannelsKey ++ List(key)
       val candidates = extractConsumeCandidates(candidateChannelsKey, channel, product)
       candidates.headOption match {
         case Some(chosenCandidate) =>

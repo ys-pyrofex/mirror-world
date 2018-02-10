@@ -1,5 +1,7 @@
 package coop.rchain
 
+import cats.implicits._
+
 import scala.collection.mutable
 
 package object shitheap {
@@ -28,4 +30,10 @@ package object shitheap {
     val _: A = a
     ()
   }
+
+  def reachAroundGet[A](xs: List[A], i: Int): Option[A] =
+    if (i === -1)
+      xs.lastOption
+    else
+      xs.lift(i)
 }

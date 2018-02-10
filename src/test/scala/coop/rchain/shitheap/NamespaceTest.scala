@@ -34,7 +34,6 @@ class NamespaceTest extends FlatSpec {
   }
 
   "things" should "work" in {
-    println("this is it")
     helloWorldScope(mutable.Map.empty)
   }
 }
