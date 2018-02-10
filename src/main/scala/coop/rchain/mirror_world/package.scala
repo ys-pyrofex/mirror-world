@@ -11,7 +11,7 @@ package object mirror_world {
   type ProduceCandidate    = (Channel, Int)
   type ConsumeCandidate[A] = (A, Int)
   type Code[A]             = (Env[A], List[A]) => Unit
-  type Env[A]              = mutable.Map[String, A]
+  type Env[A]              = Map[String, A]
   type Tuplespace[A]       = mutable.Map[List[Channel], Subspace[A]]
 
   /** Drops the 'i'th element of a list.

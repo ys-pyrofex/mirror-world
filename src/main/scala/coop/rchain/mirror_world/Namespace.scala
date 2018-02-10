@@ -10,22 +10,19 @@ class Namespace[A](t: Tuplespace[A]) {
         t.get(List(channel))
           .map { (subspace: Subspace[A]) =>
             subspace.data.zipWithIndex
-              .filter {
-                case (datum, _) => patterns(channelIndex).isMatch(datum)
-              }
+              .filter { case (datum, _) => patterns(channelIndex).isMatch(datum) }
           }
           .toList
           .flatten
     }
 
-  def consumeProducts(channels: List[Channel], chosenCandidates: List[ConsumeCandidate[A]]): List[A] = {
+  def consumeProducts(channels: List[Channel], chosenCandidates: List[ConsumeCandidate[A]]): List[A] =
     for ((candidate, candidateIndex) <- chosenCandidates.zipWithIndex) yield {
       val (datum, datumIndex) = candidate
       val channel: String     = channels(candidateIndex)
       t.get(List(channel)).foreach((subspace: Subspace[A]) => ignore { subspace.removeDataAtIndex(datumIndex) })
       datum
     }
-  }
 
   def storeWaitingContinuation(channels: List[Channel],
                                patterns: List[Pattern],
@@ -34,8 +31,8 @@ class Namespace[A](t: Tuplespace[A]) {
                                persistent: Persistent): Unit = {
     val waitingContinuation: WaitingContinuation[A] = WaitingContinuation[A](patterns, (code, env, persistent))
     t.get(channels) match {
-      case Some(x) =>
-        ignore { x.appendWaitingContinuation(waitingContinuation) }
+      case Some(subspace) =>
+        ignore { subspace.appendWaitingContinuation(waitingContinuation) }
       case None =>
         ignore { t.put(channels, Subspace.empty[A].appendWaitingContinuation(waitingContinuation)) }
     }
@@ -68,7 +65,6 @@ class Namespace[A](t: Tuplespace[A]) {
             .toList
             .flatten
     }
-
 
   def extractConsumeCandidates(candidateChannelsKey: List[List[Channel]],
                                channel: String,
@@ -110,24 +106,21 @@ class Namespace[A](t: Tuplespace[A]) {
         ignore { t.put(List(channel), Subspace.empty[A].appendData(product)) }
     }
 
-  @SuppressWarnings(Array("org.wartremover.warts.Var"))
-  def produce(channel: Channel, product: A): Unit = {
-    var candidateChannelsKey = List.empty[List[Channel]]
-    for (key <- t.keys) {
-      if (key.exists(_.contains(channel)))
-        candidateChannelsKey = candidateChannelsKey ++ List(key)
-      val candidates = extractConsumeCandidates(candidateChannelsKey, channel, product)
-      candidates.headOption match {
-        case Some(chosenCandidate) =>
-          for {
-            (consumedK, products) <- consumeContinuation(chosenCandidate, product)
-          } {
-            val (code, env, _) = consumedK.context
-            code(env, products)
-          }
-        case None =>
-          storeProduct(channel, product)
+  def produce(channel: Channel, product: A): Unit =
+    ignore {
+      t.keys.foldLeft(List.empty[List[Channel]]) { (acc: List[List[Channel]], key: List[Channel]) =>
+        val ret = if (key.exists(_.contains(channel))) key :: acc else acc
+        extractConsumeCandidates(ret, channel, product).headOption match {
+          case Some(chosenCandidate) =>
+            consumeContinuation(chosenCandidate, product).foreach {
+              case (consumedK, products) =>
+                val (code, env, _) = consumedK.context
+                code(env, products)
+            }
+          case None =>
+            storeProduct(channel, product)
+        }
+        ret
       }
     }
-  }
 }

@@ -14,18 +14,17 @@ class NamespaceTest extends FlatSpec {
     val ns: Namespace[String]  = new Namespace(ts)
 
     def testConsumer(code: Code[String])(env: Env[String], world: List[String]): Unit =
-      ns.consume(channels = world, patterns = List(Wildcard), code = code, env = env.clone(), persistent = false)
+      ns.consume(channels = world, patterns = List(Wildcard), code = code, env = env, persistent = false)
 
     def test(env: Env[String], code: Code[String]): Unit = {
-      myIgnore { env.put("helloworld", "helloworld") }
-      ns.consume(channels = List(env("helloworld")), patterns = List(Wildcard), code = code, env = env.clone(), persistent = true)
+      ns.consume(channels = List(env("helloworld")), patterns = List(Wildcard), code = code, env = env, persistent = true)
       ns.produce(channel = "helloworld", product = "world")
       ns.produce(channel = "world", product = "Hello World")
     }
 
     val results = mutable.ListBuffer.empty[List[String]]
 
-    test(mutable.Map.empty, testConsumer((_, msg) => myIgnore { results += msg }))
+    test(Map("helloworld" -> "helloworld"), testConsumer((_, msg) => myIgnore { results += msg }))
 
     assert(List(List("Hello World")) === results.toList)
   }
