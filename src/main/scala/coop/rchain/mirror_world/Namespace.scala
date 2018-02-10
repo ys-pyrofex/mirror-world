@@ -39,27 +39,17 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
     }
   }
 
-  def fetchProduceCandidates(candidateChannels: List[Channel],
-                             channelPosition: Int,
-                             productPatterns: Seq[Pattern]): List[ProduceCandidate] =
-    candidateChannels.zipWithIndex[Channel, List[(Channel, Int)]].flatMap {
-      case (candidateChannel, candidateChannelIndex) if channelPosition === candidateChannelIndex =>
-        singleton(candidateChannel)
-      case _ =>
-        Nil
-    }
-
   def matchesAt(patterns: List[Pattern], candidateChannelPosition: Int, channel: String): Boolean =
     patterns.lift(candidateChannelPosition).exists(_.isMatch(channel))
 
-  def extractConsumeCandidates(keyCandidates: List[List[Channel]],
+  def extractProduceCandidates(keyCandidates: List[List[Channel]],
                                channel: String): List[(List[ProduceCandidate], (List[Channel], Int))] = {
     for {
       candidateChannel         <- keyCandidates
       candidateChannelPosition <- candidateChannel.indexOf(channel).pure[List]
       subspace                 <- tupleSpace.get(candidateChannel).toList
       (k, ki)                  <- subspace.waitingContinuations.zipWithIndex if matchesAt(k.patterns, candidateChannelPosition, channel)
-      produceCandidates = fetchProduceCandidates(candidateChannel, candidateChannelPosition, k.patterns) if produceCandidates.nonEmpty
+      produceCandidates = candidateChannel.lift(candidateChannelPosition).toList if produceCandidates.nonEmpty
     } yield {
       (produceCandidates, (candidateChannel, ki))
     }
@@ -88,7 +78,7 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
 
   def produce(channel: Channel, product: A): Unit = {
     val candidates = tupleSpace.keys.toList.filter(_.exists(_.contains(channel)))
-    val consumers  = extractConsumeCandidates(candidates, channel)
+    val consumers  = extractProduceCandidates(candidates, channel)
     val dewers     = consumers.flatMap(consumer => consumeContinuation(consumer, product).toList)
     if (dewers.nonEmpty) {
       for ((consumedK, products) <- dewers) consumedK.k(products)

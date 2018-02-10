@@ -11,6 +11,8 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
   def dataAt[A](ns: Namespace[A], channels: List[Channel]): Option[List[A]] =
     ns.tupleSpace.get(channels).map(_.data)
 
+  def capture[A](res: mutable.ListBuffer[A])(as: A): Unit = ign(res += as)
+
   "produce" should "work" in {
 
     val ns: Namespace[String] = new Namespace(mutable.Map.empty)
@@ -26,7 +28,7 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
     ns.produce("helloworld", "world")
-    ns.consume(List("helloworld"), List(Wildcard), as => ign(results += as))
+    ns.consume(List("helloworld"), List(Wildcard), capture(results))
 
     dataAt(ns, singleton("helloworld")).value shouldBe List("world")
     results.toList shouldBe List(List("world"))
@@ -51,7 +53,7 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
     ns.produce("helloworld", "quux")
     ns.produce("helloworld", "bar")
     ns.produce("helloworld", "baz")
-    ns.consume(List("helloworld"), List(Wildcard), as => ign(results += as))
+    ns.consume(List("helloworld"), List(Wildcard), capture(results))
 
     dataAt(ns, singleton("helloworld")).value shouldBe List("baz", "bar", "quux", "world")
     results.toList shouldBe List(List("baz", "bar", "quux", "world"))
@@ -62,7 +64,7 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
     val ns: Namespace[String]                     = new Namespace(mutable.Map.empty)
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    ns.consume(List("helloworld", "quux"), List(Wildcard, Wildcard), as => ign(results += as))
+    ns.consume(List("helloworld", "quux"), List(Wildcard, Wildcard), capture(results))
     ns.produce("quux", "Hello World")
 
     dataAt(ns, List("helloworld", "quux")).value shouldBe List()
@@ -75,8 +77,8 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
     val results1: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
     val results2: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    ns.consume(List("helloworld", "quux"), List(StringMatch("helloworld"), StringMatch("quux")), as => ign(results1 += as))
-    ns.consume(List("quux"), List(Wildcard), as => ign(results2 += as))
+    ns.consume(List("helloworld", "quux"), List(StringMatch("helloworld"), StringMatch("quux")), capture(results1))
+    ns.consume(List("quux"), List(Wildcard), capture(results2))
     ns.produce("quux", "Hello World")
 
     dataAt(ns, List("helloworld", "quux")).value shouldBe List()
@@ -90,10 +92,10 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
     val ns: Namespace[String]                     = new Namespace(mutable.Map.empty)
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    ns.consume(List("helloworld"), List(Wildcard), as => ign(results += as))
-    ns.consume(List("helloworld"), List(StringMatch("helloworld")), as => ign(results += as))
-    ns.produce(channel = "helloworld", product = "Hello World")
-    ns.produce(channel = "helloworld", product = "Hello World")
+    ns.consume(List("helloworld"), List(Wildcard), capture(results))
+    ns.consume(List("helloworld"), List(StringMatch("helloworld")), capture(results))
+    ns.produce("helloworld", "Hello World")
+    ns.produce("helloworld", "Hello World")
 
     dataAt(ns, singleton("helloworld")).value shouldBe List()
     results.toList shouldBe List(List("Hello World"), List("Hello World"))
@@ -113,7 +115,7 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
       ns.produce("world", "Hello World")
     }
 
-    test(testConsumer(as => ign(results += as)))
+    test(testConsumer(capture(results)))
 
     dataAt(ns, singleton("helloworld")).value shouldBe List()
     results.toList shouldBe List(List("Hello World"))
