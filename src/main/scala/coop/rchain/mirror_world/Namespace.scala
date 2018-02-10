@@ -52,16 +52,17 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
         if (channelPosition === candidateChannelIndex)
           singleton((candidateChannel, -1))
         else
-          tupleSpace
-            .get(singleton(candidateChannel))
-            .map { (subspace: Subspace[A]) =>
-              subspace.data
-                .zipWithIndex[A, List[(A, Int)]]
-                .filter { case (datum, _) => productPatterns.lift(candidateChannelIndex).exists(_.isMatch(datum)) }
-                .map { case (_, datumIndex) => (candidateChannel, datumIndex) }
-            }
-            .toList
-            .flatten
+          Nil
+          // tupleSpace
+          //   .get(singleton(candidateChannel))
+          //   .map { (subspace: Subspace[A]) =>
+          //     subspace.data
+          //       .zipWithIndex[A, List[(A, Int)]]
+          //       .filter { case (datum, _) => productPatterns.lift(candidateChannelIndex).exists(_.isMatch(datum)) }
+          //       .map { case (_, datumIndex) => (candidateChannel, datumIndex) }
+          //   }
+          //   .toList
+          //   .flatten
     }
 
   def matchCont(waitingK: WaitingContinuation[A], candidateChannelPosition: Int, channel: String): Boolean =

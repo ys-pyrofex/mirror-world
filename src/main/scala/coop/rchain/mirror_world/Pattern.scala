@@ -1,12 +1,12 @@
 package coop.rchain.mirror_world
 
-@SuppressWarnings(Array("org.wartremover.warts.Equals"))
-class Pattern(pattern: String) {
+sealed abstract class Pattern extends Product with Serializable {
+  @SuppressWarnings(Array("org.wartremover.warts.Equals"))
   def isMatch(a: Any): Boolean =
     this match {
-      case Wildcard => true
-      case _        => this.pattern == a
+      case Wildcard            => true
+      case StringMatch(string) => string == a
     }
 }
-
-case object Wildcard extends Pattern("")
+final case class StringMatch(string: String) extends Pattern
+case object Wildcard                         extends Pattern

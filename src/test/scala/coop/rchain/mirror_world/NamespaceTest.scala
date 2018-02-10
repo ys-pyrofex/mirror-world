@@ -1,6 +1,6 @@
 package coop.rchain.mirror_world
 
-import coop.rchain.mirror_world.{ignore => myIgnore}
+import coop.rchain.mirror_world.{ignore => ign}
 import org.scalatest._
 
 import scala.collection.mutable
@@ -12,7 +12,7 @@ class NamespaceTest extends FlatSpec {
 
     val ns: Namespace[String] = new Namespace(mutable.Map.empty)
 
-    ns.produce(channel = "helloworld", product = "world")
+    ns.produce("helloworld", "world")
 
     assert(ns.tupleSpace.get(singleton("helloworld")).map(_.data).contains(List("world")))
   }
@@ -22,8 +22,8 @@ class NamespaceTest extends FlatSpec {
     val ns: Namespace[String]                     = new Namespace(mutable.Map.empty)
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    ns.produce(channel = "helloworld", product = "world")
-    ns.consume(channels = List("helloworld"), patterns = List(Wildcard), k = (msg) => myIgnore(results += msg))
+    ns.produce("helloworld", "world")
+    ns.consume(List("helloworld"), List(Wildcard), as => ign(results += as))
 
     assert(List(List("world")) === results.toList)
   }
@@ -33,10 +33,23 @@ class NamespaceTest extends FlatSpec {
     val ns: Namespace[String]                     = new Namespace(mutable.Map.empty)
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    ns.consume(channels = List("helloworld", "quux"), patterns = List(Wildcard, Wildcard), k = msg => myIgnore(results += msg))
-    ns.produce(channel = "quux", product = "Hello World")
+    ns.consume(List("helloworld", "quux"), List(Wildcard, Wildcard), as => ign(results += as))
+    ns.produce("quux", "Hello World")
 
     assert(List(List("Hello World")) === results.toList)
+  }
+
+  "consume on multiple channels followed by consume on a same channel followed by produce" should "work" in {
+
+    val ns: Namespace[String]                      = new Namespace(mutable.Map.empty)
+    val results1: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
+    val results2: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
+
+    ns.consume(List("helloworld", "quux"), List(StringMatch("helloworld"), StringMatch("quux")), as => ign(results1 += as))
+    ns.consume(List("quux"), List(Wildcard), as => ign(results2 += as))
+    ns.produce("quux", "Hello World")
+
+    assert(List(List("Hello World")) === results1.toList && List(List("Hello World")) === results2.toList)
   }
 
   "two consumes on a single channel followed by produce" should "work" in {
@@ -44,8 +57,8 @@ class NamespaceTest extends FlatSpec {
     val ns: Namespace[String]                     = new Namespace(mutable.Map.empty)
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    ns.consume(channels = List("helloworld"), patterns = List(Wildcard), k = msg => myIgnore(results += msg))
-    ns.consume(channels = List("helloworld"), patterns = List(Wildcard), k = msg => myIgnore(results += msg))
+    ns.consume(List("helloworld"), List(Wildcard), as => ign(results += as))
+    ns.consume(List("helloworld"), List(StringMatch("helloworld")), as => ign(results += as))
     ns.produce(channel = "helloworld", product = "Hello World")
     ns.produce(channel = "helloworld", product = "Hello World")
 
@@ -58,15 +71,15 @@ class NamespaceTest extends FlatSpec {
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
     def testConsumer(k: Continuation[String])(channels: List[String]): Unit =
-      ns.consume(channels = channels, patterns = List(Wildcard), k = k)
+      ns.consume(channels, List(Wildcard), k)
 
     def test(k: Continuation[String]): Unit = {
-      ns.consume(channels = List("helloworld"), patterns = List(Wildcard), k = k)
-      ns.produce(channel = "helloworld", product = "world")
-      ns.produce(channel = "world", product = "Hello World")
+      ns.consume(List("helloworld"), List(Wildcard), k)
+      ns.produce("helloworld", "world")
+      ns.produce("world", "Hello World")
     }
 
-    test(testConsumer((msg) => myIgnore { results += msg }))
+    test(testConsumer(as => ign(results += as)))
 
     assert(List(List("Hello World")) === results.toList)
   }
