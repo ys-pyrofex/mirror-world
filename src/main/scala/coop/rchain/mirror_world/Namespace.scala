@@ -107,24 +107,14 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
         ignore { tupleSpace.put(List(channel), Subspace.empty[A].appendData(product)) }
     }
 
-  def produce(channel: Channel, product: A): Unit =
-    ignore {
-      val cands = tupleSpace.keys.foldLeft(List.empty[List[Channel]]) { (acc: List[List[Channel]], key: List[Channel]) =>
-        if (key.exists(_.contains(channel))) key :: acc else acc
-      }
-      val consumers = extractConsumeCandidates(cands, channel)
-      if (consumers.nonEmpty) {
-        consumers.foreach { consumer =>
-          consumeContinuation(consumer, product) match {
-            case Some((consumedK, products)) =>
-              consumedK.k(products)
-            case None =>
-              storeProduct(channel, product)
-          }
-        }
-      } else {
-        storeProduct(channel, product)
-      }
-
+  def produce(channel: Channel, product: A): Unit = {
+    val candidates = tupleSpace.keys.toList.filter(_.exists(_.contains(channel)))
+    val consumers  = extractConsumeCandidates(candidates, channel)
+    val dewers     = consumers.flatMap(consumer => consumeContinuation(consumer, product).toList)
+    if (dewers.nonEmpty) {
+      for ((consumedK, products) <- dewers) consumedK.k(products)
+    } else {
+      storeProduct(channel, product)
     }
+  }
 }
