@@ -20,22 +20,22 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
           .map(_._1)
     }
 
-  def storeWaitingContinuation(channels: Seq[Channel], patterns: Seq[Pattern], k: Continuation[A]): Unit = {
-    val waitingContinuation: WaitingContinuation[A] = WaitingContinuation(patterns, k)
+  def storeWaitingContinuation(channels: Seq[Channel], waitingContinuation: WaitingContinuation[A]): Unit =
     tupleSpace.get(channels) match {
       case Some(subspace) =>
         ignore { subspace.appendWaitingContinuation(waitingContinuation) }
       case None =>
         ignore { tupleSpace.put(channels, Subspace.empty[A].appendWaitingContinuation(waitingContinuation)) }
     }
-  }
 
-  def consume(channels: Seq[Channel], patterns: Seq[Pattern], k: Continuation[A]): Unit = {
-    val chosenCandidates: Seq[A] = extractDataCandidates(channels, patterns)
+  def consume(channels: Seq[Channel], patterns: Seq[Pattern], k: Continuation[A]): (WaitingContinuation[A], Seq[A]) = {
+    val waitingContinuation: WaitingContinuation[A] = WaitingContinuation(patterns, k)
+    val chosenCandidates: Seq[A]                    = extractDataCandidates(channels, patterns)
     if (chosenCandidates.isEmpty) {
-      storeWaitingContinuation(channels, patterns, k)
+      storeWaitingContinuation(channels, waitingContinuation)
+      (waitingContinuation, Nil)
     } else {
-      k(chosenCandidates)
+      (waitingContinuation, chosenCandidates)
     }
   }
 
@@ -70,14 +70,15 @@ class Namespace[A](val tupleSpace: Tuplespace[A]) {
         ignore { tupleSpace.put(singleton(channel), Subspace.empty[A].appendData(product)) }
     }
 
-  def produce(channel: Channel, product: A): Unit = {
+  def produce(channel: Channel, product: A): (Seq[WaitingContinuation[A]], Seq[A]) = {
     val keyCandidates: Seq[Seq[Channel]]                  = tupleSpace.keys.toList.filter(_.exists(_.contains(channel)))
     val produceCandidates: Seq[(Seq[Channel], Int)]       = extractProduceCandidates(keyCandidates, channel)
     val waitingContinuations: Seq[WaitingContinuation[A]] = produceCandidates.flatMap(chosen => getContinuation(chosen).toList)
     if (waitingContinuations.isEmpty) {
       storeProduct(channel, product)
+      (Seq.empty[WaitingContinuation[A]], singleton(product))
     } else {
-      for (waitingK <- waitingContinuations) waitingK.k(singleton(product))
+      (waitingContinuations, singleton(product))
     }
   }
 }
