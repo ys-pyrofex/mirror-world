@@ -8,47 +8,49 @@ import scala.collection.mutable
 @SuppressWarnings(Array("org.wartremover.warts.MutableDataStructures", "org.wartremover.warts.NonUnitStatements"))
 class NamespaceTest extends FlatSpec with Matchers with OptionValues {
 
-  def dataAt[A](ns: Namespace[A], channels: Seq[Channel]): Option[Seq[A]] =
+  type Continuation[A] = (Seq[A]) => Unit
+
+  def dataAt[A, K](ns: Namespace[A, K], channels: Seq[Channel]): Option[Seq[A]] =
     ns.tupleSpace.get(channels).map(_.data)
 
   def capture[A](res: mutable.ListBuffer[Seq[A]]): Continuation[A] = (as: Seq[A]) => ign(res += as)
 
   "produce" should "work" in {
 
-    val ns: Namespace[String] = new Namespace(mutable.Map.empty)
+    val ns: Namespace[String, Continuation[String]] = new Namespace(mutable.Map.empty)
 
     ns.produce("hello", "world")
 
-    dataAt(ns, singleton("hello")).value shouldBe Seq("world")
+    dataAt(ns, Seq("hello")).value shouldBe Seq("world")
   }
 
   "produce, consume" should "work" in {
 
-    val ns: Namespace[String]                    = new Namespace(mutable.Map.empty)
-    val results: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
+    val ns: Namespace[String, Continuation[String]] = new Namespace(mutable.Map.empty)
+    val results: mutable.ListBuffer[Seq[String]]    = mutable.ListBuffer.empty[Seq[String]]
 
     ns.produce("hello", "world")
     val (wk, product) = ns.consume(Seq("hello"), Seq(Wildcard), capture(results))
     wk.k(product)
 
-    dataAt(ns, singleton("hello")).value shouldBe Seq("world")
+    dataAt(ns, Seq("hello")).value shouldBe Seq("world")
     results.toList shouldBe Seq(Seq("world"))
   }
 
   "produce, produce" should "work" in {
 
-    val ns: Namespace[String] = new Namespace(mutable.Map.empty)
+    val ns: Namespace[String, Continuation[String]] = new Namespace(mutable.Map.empty)
 
     ns.produce("hello", "world")
     ns.produce("hello", "goodbye")
 
-    dataAt(ns, singleton("hello")).value shouldBe Seq("goodbye", "world")
+    dataAt(ns, Seq("hello")).value shouldBe Seq("goodbye", "world")
   }
 
   "produce, produce, consume" should "work" in {
 
-    val ns: Namespace[String]                    = new Namespace(mutable.Map.empty)
-    val results: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
+    val ns: Namespace[String, Continuation[String]] = new Namespace(mutable.Map.empty)
+    val results: mutable.ListBuffer[Seq[String]]    = mutable.ListBuffer.empty[Seq[String]]
 
     ns.produce("hello", "world")
     ns.produce("hello", "hello")
@@ -56,14 +58,14 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
     val (wk, product) = ns.consume(Seq("hello"), Seq(Wildcard), capture(results))
     wk.k(product)
 
-    dataAt(ns, singleton("hello")).value shouldBe Seq("goodbye", "hello", "world")
+    dataAt(ns, Seq("hello")).value shouldBe Seq("goodbye", "hello", "world")
     results.toList shouldBe Seq(Seq("goodbye", "hello", "world"))
   }
 
   "consume on multiple channels, produce" should "work" in {
 
-    val ns: Namespace[String]                    = new Namespace(mutable.Map.empty)
-    val results: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
+    val ns: Namespace[String, Continuation[String]] = new Namespace(mutable.Map.empty)
+    val results: mutable.ListBuffer[Seq[String]]    = mutable.ListBuffer.empty[Seq[String]]
 
     ns.consume(Seq("hello", "world"), Seq(Wildcard, Wildcard), capture(results))
     val (wks, product) = ns.produce("world", "This is some data")
@@ -75,9 +77,9 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
 
   "consume on multiple channels, consume on a same channel, produce" should "work" in {
 
-    val ns: Namespace[String]                     = new Namespace(mutable.Map.empty)
-    val results1: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
-    val results2: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
+    val ns: Namespace[String, Continuation[String]] = new Namespace(mutable.Map.empty)
+    val results1: mutable.ListBuffer[Seq[String]]   = mutable.ListBuffer.empty[Seq[String]]
+    val results2: mutable.ListBuffer[Seq[String]]   = mutable.ListBuffer.empty[Seq[String]]
 
     ns.consume(Seq("hello", "goodbye"), Seq(StringMatch("hello"), StringMatch("goodbye")), capture(results1))
     ns.consume(Seq("goodbye"), Seq(Wildcard), capture(results2))
@@ -92,8 +94,8 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
 
   "two consumes on a single channel, produce" should "work" in {
 
-    val ns: Namespace[String]                    = new Namespace(mutable.Map.empty)
-    val results: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
+    val ns: Namespace[String, Continuation[String]] = new Namespace(mutable.Map.empty)
+    val results: mutable.ListBuffer[Seq[String]]    = mutable.ListBuffer.empty[Seq[String]]
 
     ns.consume(Seq("hello"), Seq(Wildcard), capture(results))
     ns.consume(Seq("hello"), Seq(StringMatch("hello")), capture(results))
@@ -102,14 +104,14 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
     for (k <- wks1.map(_.k)) k(product1)
     for (k <- wks2.map(_.k)) k(product2)
 
-    dataAt(ns, singleton("hello")).value shouldBe Nil
+    dataAt(ns, Seq("hello")).value shouldBe Nil
     results.toList shouldBe Seq(Seq("This is some data"), Seq("This is some other data"))
   }
 
   "the hello world example" should "work" in {
 
-    val ns: Namespace[String]                    = new Namespace(mutable.Map.empty)
-    val results: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
+    val ns: Namespace[String, Continuation[String]] = new Namespace(mutable.Map.empty)
+    val results: mutable.ListBuffer[Seq[String]]    = mutable.ListBuffer.empty[Seq[String]]
 
     def testConsumer(k: Continuation[String])(channels: Seq[String]): Unit = {
       val (wk, product) = ns.consume(channels, Seq(Wildcard), k)
@@ -126,7 +128,7 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
 
     test(testConsumer(capture(results)))
 
-    dataAt(ns, singleton("helloworld")).value shouldBe Nil
+    dataAt(ns, Seq("helloworld")).value shouldBe Nil
     results.toList shouldBe Seq(Seq("Hello World"))
   }
 }
