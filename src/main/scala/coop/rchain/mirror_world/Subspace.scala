@@ -26,9 +26,9 @@ class Subspace[A](_data: mutable.ListBuffer[A], _waitingContinuations: mutable.L
     this
   }
 
-  def data: List[A] = _data.toList
+  def data: Seq[A] = _data.toList
 
-  def waitingContinuations: List[WaitingContinuation[A]] = _waitingContinuations.toList
+  def waitingContinuations: Seq[WaitingContinuation[A]] = _waitingContinuations.toList
 }
 
 @SuppressWarnings(Array("org.wartremover.warts.MutableDataStructures"))
