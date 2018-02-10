@@ -2,15 +2,16 @@ package coop.rchain.mirror_world
 
 import cats.implicits._
 
-class Namespace[A](t: Tuplespace[A]) {
+class Namespace[A](val tupleSpace: Tuplespace[A]) {
 
   def extractDataCandidates(channels: List[Channel], patterns: List[Pattern]): List[ConsumeCandidate[A]] =
     channels.zipWithIndex.flatMap {
       case (channel, channelIndex) =>
-        t.get(List(channel))
+        tupleSpace
+          .get(singleton(channel))
           .map { (subspace: Subspace[A]) =>
             subspace.data.zipWithIndex
-              .filter { case (datum, _) => patterns(channelIndex).isMatch(datum) }
+              .filter { case (datum, _) => patterns.lift(channelIndex).exists(_.isMatch(datum)) }
           }
           .toList
           .flatten
@@ -20,30 +21,26 @@ class Namespace[A](t: Tuplespace[A]) {
     for ((candidate, candidateIndex) <- chosenCandidates.zipWithIndex) yield {
       val (datum, datumIndex) = candidate
       val channel: String     = channels(candidateIndex)
-      t.get(List(channel)).foreach((subspace: Subspace[A]) => ignore { subspace.removeDataAtIndex(datumIndex) })
+      tupleSpace.get(singleton(channel)).foreach((subspace: Subspace[A]) => ignore { subspace.removeDataAtIndex(datumIndex) })
       datum
     }
 
-  def storeWaitingContinuation(channels: List[Channel],
-                               patterns: List[Pattern],
-                               code: Code[A],
-                               env: Env[A],
-                               persistent: Persistent): Unit = {
-    val waitingContinuation: WaitingContinuation[A] = WaitingContinuation[A](patterns, (code, env, persistent))
-    t.get(channels) match {
+  def storeWaitingContinuation(channels: List[Channel], patterns: List[Pattern], k: Continuation[A]): Unit = {
+    val waitingContinuation: WaitingContinuation[A] = WaitingContinuation[A](patterns, k)
+    tupleSpace.get(channels) match {
       case Some(subspace) =>
         ignore { subspace.appendWaitingContinuation(waitingContinuation) }
       case None =>
-        ignore { t.put(channels, Subspace.empty[A].appendWaitingContinuation(waitingContinuation)) }
+        ignore { tupleSpace.put(channels, Subspace.empty[A].appendWaitingContinuation(waitingContinuation)) }
     }
   }
 
-  def consume(channels: List[Channel], patterns: List[Pattern], code: Code[A], env: Env[A], persistent: Persistent): Unit = {
+  def consume(channels: List[Channel], patterns: List[Pattern], k: Continuation[A]): Unit = {
     val chosenCandidates = extractDataCandidates(channels, patterns)
     if (chosenCandidates.nonEmpty) {
-      code(env, consumeProducts(channels, chosenCandidates))
+      k(consumeProducts(channels, chosenCandidates))
     } else {
-      storeWaitingContinuation(channels, patterns, code, env, persistent)
+      storeWaitingContinuation(channels, patterns, k)
     }
   }
 
@@ -53,33 +50,33 @@ class Namespace[A](t: Tuplespace[A]) {
     candidateChannels.zipWithIndex[Channel, List[(Channel, Int)]].flatMap {
       case (candidateChannel, candidateChannelIndex) =>
         if (channelPosition === candidateChannelIndex)
-          List((candidateChannel, -1))
+          singleton((candidateChannel, -1))
         else
-          t.get(List(candidateChannel))
+          tupleSpace
+            .get(singleton(candidateChannel))
             .map { (subspace: Subspace[A]) =>
               subspace.data
                 .zipWithIndex[A, List[(A, Int)]]
-                .filter { case (datum, _) => productPatterns(candidateChannelIndex).isMatch(datum) }
+                .filter { case (datum, _) => productPatterns.lift(candidateChannelIndex).exists(_.isMatch(datum)) }
                 .map { case (_, datumIndex) => (candidateChannel, datumIndex) }
             }
             .toList
             .flatten
     }
 
-  def extractConsumeCandidates(candidateChannelsKey: List[List[Channel]],
-                               channel: String,
-                               product: Any): List[(List[ProduceCandidate], (List[Channel], Int))] = {
+  def matchCont(waitingK: WaitingContinuation[A], candidateChannelPosition: Int, channel: String): Boolean =
+    waitingK.patterns.lift(candidateChannelPosition).exists(_.isMatch(channel))
+
+  def extractConsumeCandidates(keyCandidates: List[List[Channel]],
+                               channel: String): List[(List[ProduceCandidate], (List[Channel], Int))] = {
     for {
-      candidateChannelKey <- candidateChannelsKey
-      candidateChannel = candidateChannelKey
-      channelPosition  = candidateChannel.indexOf(channel)
-      subspace                        <- t.get(candidateChannelKey).toList
-      (waitingCont, waitingContIndex) <- subspace.waitingContinuations.zipWithIndex
-      if reachAroundGet(waitingCont.patterns, channelPosition).exists(_.isMatch(product))
-      produceCandidates = fetchProduceCandidates(candidateChannelKey, channelPosition, waitingCont.patterns)
-      if produceCandidates.nonEmpty
+      candidateChannel         <- keyCandidates
+      candidateChannelPosition <- candidateChannel.indexOf(channel).pure[List]
+      subspace                 <- tupleSpace.get(candidateChannel).toList
+      (k, ki)                  <- subspace.waitingContinuations.zipWithIndex if matchCont(k, candidateChannelPosition, channel)
+      produceCandidates = fetchProduceCandidates(candidateChannel, candidateChannelPosition, k.patterns) if produceCandidates.nonEmpty
     } yield {
-      (produceCandidates, (candidateChannelKey, waitingContIndex))
+      (produceCandidates, (candidateChannel, ki))
     }
   }
 
@@ -91,36 +88,42 @@ class Namespace[A](t: Tuplespace[A]) {
           case (_, dataIndex) if dataIndex === -1 =>
             Some(product).toList
           case (produceChannel, dataIndex) =>
-            t.get(List(produceChannel)).flatMap(s => s.removeDataAtIndex(dataIndex)).toList
+            tupleSpace.get(singleton(produceChannel)).flatMap(s => s.removeDataAtIndex(dataIndex)).toList
         }
-        t.get(candidateChannelKey)
+        tupleSpace
+          .get(candidateChannelKey)
           .flatMap(_.removeWaitingContinuationAtIndex(waitingContinuationIndex))
           .map((value: WaitingContinuation[A]) => (value, products))
     }
 
+  /** Store product at channel
+    */
   def storeProduct(channel: Channel, product: A): Unit =
-    t.get(List(channel)) match {
+    tupleSpace.get(singleton(channel)) match {
       case Some(s) =>
         ignore { s.appendData(product) }
       case None =>
-        ignore { t.put(List(channel), Subspace.empty[A].appendData(product)) }
+        ignore { tupleSpace.put(List(channel), Subspace.empty[A].appendData(product)) }
     }
 
   def produce(channel: Channel, product: A): Unit =
     ignore {
-      t.keys.foldLeft(List.empty[List[Channel]]) { (acc: List[List[Channel]], key: List[Channel]) =>
-        val ret = if (key.exists(_.contains(channel))) key :: acc else acc
-        extractConsumeCandidates(ret, channel, product).headOption match {
-          case Some(chosenCandidate) =>
-            consumeContinuation(chosenCandidate, product).foreach {
-              case (consumedK, products) =>
-                val (code, env, _) = consumedK.context
-                code(env, products)
-            }
-          case None =>
-            storeProduct(channel, product)
-        }
-        ret
+      val cands = tupleSpace.keys.foldLeft(List.empty[List[Channel]]) { (acc: List[List[Channel]], key: List[Channel]) =>
+        if (key.exists(_.contains(channel))) key :: acc else acc
       }
+      val consumers = extractConsumeCandidates(cands, channel)
+      if (consumers.nonEmpty) {
+        consumers.foreach { consumer =>
+          consumeContinuation(consumer, product) match {
+            case Some((consumedK, products)) =>
+              consumedK.k(products)
+            case None =>
+              storeProduct(channel, product)
+          }
+        }
+      } else {
+        storeProduct(channel, product)
+      }
+
     }
 }
