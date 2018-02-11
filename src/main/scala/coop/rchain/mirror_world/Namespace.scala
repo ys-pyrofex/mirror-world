@@ -4,6 +4,9 @@ import cats.implicits._
 
 class Namespace[A, K](val tuplespace: Tuplespace[A, K]) {
 
+  def matchesAtIndex[T](patterns: Seq[Pattern], index: Int, matchCandidate: T): Boolean =
+    patterns.lift(index).exists(_.isMatch(matchCandidate))
+
   /* Consume */
 
   def extractDataCandidates(channels: Seq[Channel], patterns: Seq[Pattern]): Seq[A] =
@@ -13,7 +16,7 @@ class Namespace[A, K](val tuplespace: Tuplespace[A, K]) {
           .get(channel.pure[List])
           .map { (subspace: Subspace[A, K]) =>
             subspace.data.zipWithIndex
-              .filter { case (datum, _) => patterns.lift(channelIndex).exists(_.isMatch(datum)) }
+              .filter { case (datum, _) => matchesAtIndex(patterns, channelIndex, datum) }
           }
           .toList
           .flatten
@@ -33,23 +36,18 @@ class Namespace[A, K](val tuplespace: Tuplespace[A, K]) {
     val extractedProducts: Seq[A]                   = extractDataCandidates(channels, patterns)
     if (extractedProducts.isEmpty) {
       storeWaitingContinuation(channels, waitingContinuation)
-      (waitingContinuation, Nil)
-    } else {
-      (waitingContinuation, extractedProducts)
     }
+    (waitingContinuation, extractedProducts)
   }
 
   /* Produce */
-
-  def matchesAt(patterns: Seq[Pattern], candidateChannelPosition: Int, channel: Channel): Boolean =
-    patterns.lift(candidateChannelPosition).exists(_.isMatch(channel))
 
   def extractProduceCandidates(keyCandidates: Seq[Seq[Channel]], channel: Channel): Seq[(Seq[Channel], Int)] =
     for {
       candidateChannel         <- keyCandidates
       candidateChannelPosition <- candidateChannel.indexOf(channel).pure[List]
       subspace                 <- tuplespace.get(candidateChannel).toList
-      (k, ki)                  <- subspace.waitingContinuations.zipWithIndex if matchesAt(k.patterns, candidateChannelPosition, channel)
+      (k, ki)                  <- subspace.waitingContinuations.zipWithIndex if matchesAtIndex(k.patterns, candidateChannelPosition, channel)
     } yield {
       (candidateChannel, ki)
     }

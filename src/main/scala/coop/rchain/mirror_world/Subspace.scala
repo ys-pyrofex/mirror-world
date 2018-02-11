@@ -5,10 +5,11 @@ import scala.collection.mutable
 @SuppressWarnings(Array("org.wartremover.warts.MutableDataStructures"))
 class Subspace[A, K](_data: mutable.ListBuffer[A], _waitingContinuations: mutable.ListBuffer[WaitingContinuation[K]]) {
 
-  def removeDataAtIndex(index: Int): Option[A] = _data.lift(index).map { (a: A) =>
-    ignore { _data.remove(index) }
-    a
-  }
+  def removeDataAtIndex(index: Int): Option[A] =
+    _data.lift(index).map { (a: A) =>
+      ignore { _data.remove(index) }
+      a
+    }
 
   def removeWaitingContinuationAtIndex(index: Int): Option[WaitingContinuation[K]] =
     _waitingContinuations.lift(index).map { (k: WaitingContinuation[K]) =>
