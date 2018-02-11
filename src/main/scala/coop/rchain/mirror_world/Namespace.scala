@@ -21,13 +21,13 @@ class Namespace[A, K](val tuplespace: Tuplespace[A, K]) {
         ignore { tuplespace.put(channels, Subspace.empty[A, K].appendWaitingContinuation(waitingContinuation)) }
     }
 
-  def consume(channels: Seq[Channel], patterns: Seq[Pattern], k: K): (WaitingContinuation[K], Seq[A]) = {
+  def consume(channels: Seq[Channel], patterns: Seq[Pattern], k: K): (Seq[WaitingContinuation[K]], Seq[A]) = {
     val waitingContinuation: WaitingContinuation[K] = WaitingContinuation(patterns, k)
     val extractedProducts: Seq[A]                   = extractDataCandidates(channels, patterns)
     if (extractedProducts.isEmpty) {
       storeWaitingContinuation(channels, waitingContinuation)
     }
-    (waitingContinuation, extractedProducts)
+    (waitingContinuation.pure[List], extractedProducts)
   }
 
   /* Produce */
