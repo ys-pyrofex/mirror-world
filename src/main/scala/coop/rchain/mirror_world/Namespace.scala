@@ -7,18 +7,11 @@ class Namespace[A, K](val tuplespace: Tuplespace[A, K]) {
   /* Consume */
 
   def extractDataCandidates(channels: Seq[Channel], patterns: Seq[Pattern]): Seq[A] =
-    channels.zipWithIndex.flatMap {
-      case (channel, channelIndex) =>
-        tuplespace
-          .get(channel.pure[List])
-          .map { (subspace: Subspace[A, K]) =>
-            subspace.data.zipWithIndex
-              .filter { case (datum, _) => Namespace.matchesAtIndex(patterns, channelIndex, datum) }
-          }
-          .toList
-          .flatten
-          .map(_._1)
-    }
+    for {
+      (channel, channelIndex) <- channels.zipWithIndex
+      subspace                <- tuplespace.get(channel.pure[List]).toList
+      d                       <- subspace.data if Namespace.matchesAtIndex(patterns, channelIndex, d)
+    } yield d
 
   def storeWaitingContinuation(channels: Seq[Channel], waitingContinuation: WaitingContinuation[K]): Unit =
     tuplespace.get(channels) match {
@@ -41,12 +34,12 @@ class Namespace[A, K](val tuplespace: Tuplespace[A, K]) {
 
   def extractProduceCandidates(keyCandidates: Seq[Seq[Channel]], channel: Channel): Seq[(Seq[Channel], Int)] =
     for {
-      candidateChannel         <- keyCandidates
-      candidateChannelPosition <- candidateChannel.indexOf(channel).pure[List]
-      subspace                 <- tuplespace.get(candidateChannel).toList
-      (k, ki)                  <- subspace.waitingContinuations.zipWithIndex if Namespace.matchesAtIndex(k.patterns, candidateChannelPosition, channel)
+      candidateChannels         <- keyCandidates
+      candidateChannelsPosition <- candidateChannels.indexOf(channel).pure[List]
+      subspace                  <- tuplespace.get(candidateChannels).toList
+      (k, ki)                   <- subspace.waitingContinuations.zipWithIndex if Namespace.matchesAtIndex(k.patterns, candidateChannelsPosition, channel)
     } yield {
-      (candidateChannel, ki)
+      (candidateChannels, ki)
     }
 
   def getContinuation(chosenCandidate: (Seq[Channel], Int)): Option[WaitingContinuation[K]] =
@@ -66,15 +59,13 @@ class Namespace[A, K](val tuplespace: Tuplespace[A, K]) {
     }
 
   def produce(channel: Channel, data: A): (Seq[WaitingContinuation[K]], Seq[A]) = {
-    val keyCandidates: Seq[Seq[Channel]]                  = tuplespace.keys.toList.filter(_.exists(_.contains(channel)))
+    val keyCandidates: Seq[Seq[Channel]]                  = tuplespace.keys.toSeq.filter(_.exists(_.contains(channel)))
     val produceCandidates: Seq[(Seq[Channel], Int)]       = extractProduceCandidates(keyCandidates, channel)
     val waitingContinuations: Seq[WaitingContinuation[K]] = produceCandidates.flatMap(chosen => getContinuation(chosen).toList)
     if (waitingContinuations.isEmpty) {
       storeData(channel, data)
-      (Seq.empty[WaitingContinuation[K]], data.pure[List])
-    } else {
-      (waitingContinuations, data.pure[List])
     }
+    (waitingContinuations, data.pure[List])
   }
 }
 
