@@ -2,14 +2,19 @@ package coop.rchain.mirror_world
 
 import coop.rchain.mirror_world.{ignore => ign}
 import org.log4s._
-import org.scalatest.{FlatSpec, Matchers, OptionValues}
+import org.scalatest._
 
 import scala.collection.mutable
 
 @SuppressWarnings(Array("org.wartremover.warts.MutableDataStructures", "org.wartremover.warts.NonUnitStatements"))
-class NamespaceTest extends FlatSpec with Matchers with OptionValues {
+class NamespaceTest extends FlatSpec with Matchers with OptionValues with SequentialNestedSuiteExecution {
 
-  private val logger = getLogger
+  private val logger: Logger = getLogger
+
+  override def withFixture(test: NoArgTest): Outcome = {
+    logger.debug(s"Test: ${test.name}")
+    super.withFixture(test)
+  }
 
   type Continuation[A] = (Seq[A]) => Unit
 
@@ -19,11 +24,13 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
   def runKs(t: (Seq[WaitingContinuation[Continuation[String]]], Seq[String])): Unit =
     t match {
       case (waitingContinuations, data) =>
-        logger.debug(s"runKs: t: $t")
-        for (wk <- waitingContinuations) wk.k(data)
+        for (wk <- waitingContinuations) {
+          logger.debug(s"runK: <lambda>($data)")
+          wk.k(data)
+        }
     }
 
-  def capture[A](res: mutable.ListBuffer[Seq[A]]): Continuation[A] = (as: Seq[A]) => if (as.nonEmpty) { ign { res += as } }
+  def capture[A](res: mutable.ListBuffer[Seq[A]]): Continuation[A] = (as: Seq[A]) => ign(res += as)
 
   "produce" should "work" in {
 
@@ -79,7 +86,7 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
     runKs(ns.produce("world", "This is some data"))
 
     dataAt(ns, Seq("hello", "world")).value shouldBe Nil
-    results.toList shouldBe Seq(Seq("This is some data"))
+    results.toList shouldBe Seq(Nil, Seq("This is some data"))
   }
 
   "consume on multiple channels, consume on a same channel, produce" should "work" in {
@@ -94,8 +101,8 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
 
     dataAt(ns, Seq("hello", "goodbye")).value shouldBe Nil
     dataAt(ns, Seq("goodbye")).value shouldBe Nil
-    results1.toList shouldBe Seq(Seq("This is some data"))
-    results2.toList shouldBe Seq(Seq("This is some data"))
+    results1.toList shouldBe Seq(Nil, Seq("This is some data"))
+    results2.toList shouldBe Seq(Nil, Seq("This is some data"))
   }
 
   "two consumes on a single channel, produce" should "work" in {
@@ -109,7 +116,7 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
     runKs(ns.produce("hello", "This is some other data"))
 
     dataAt(ns, Seq("hello")).value shouldBe Nil
-    results.toList shouldBe Seq(Seq("This is some data"), Seq("This is some other data"))
+    results.toList shouldBe Seq(Nil, Nil, Seq("This is some data"), Seq("This is some other data"))
   }
 
   "the hello world example" should "work" in {
@@ -130,6 +137,6 @@ class NamespaceTest extends FlatSpec with Matchers with OptionValues {
     test(testConsumer(capture(results)))
 
     dataAt(ns, Seq("helloworld")).value shouldBe Nil
-    results.toList shouldBe Seq(Seq("Hello World"))
+    results.toList shouldBe Seq(Nil, Nil, Seq("Hello World"))
   }
 }
