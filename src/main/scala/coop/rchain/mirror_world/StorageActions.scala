@@ -4,8 +4,9 @@ import cats.implicits._
 
 trait StorageActions {
 
-  private[mirror_world] def matchesAtIndex[T](patterns: Seq[Pattern], index: Int, matchCandidate: T): Boolean =
-    patterns.lift(index).exists(_.isMatch(matchCandidate))
+  private[mirror_world] def matchesAtIndex[T](patterns: Seq[Pattern], index: Int, matchCandidate: T)(
+      implicit m: Matcher[Pattern, T]): Boolean =
+    patterns.lift(index).exists((pattern: Pattern) => m.isMatch(pattern, matchCandidate))
 
   /* Consume */
 
