@@ -4,7 +4,7 @@ import cats.implicits._
 
 trait StorageActions {
 
-  private[mirror_world] def matchesAtIndex[T](patterns: Seq[Pattern], matchCandidate: T)(implicit m: Matcher[Pattern, T]): Boolean =
+  private[mirror_world] def matchExists[T](patterns: Seq[Pattern], matchCandidate: T)(implicit m: Matcher[Pattern, T]): Boolean =
     patterns.exists((pattern: Pattern) => m.isMatch(pattern, matchCandidate))
 
   /* Consume */
@@ -12,7 +12,7 @@ trait StorageActions {
   private[mirror_world] def extractDataCandidates[A, K](ns: Storage[A, K], channels: Seq[Channel], patterns: Seq[Pattern]): Seq[A] =
     for {
       channel <- channels
-      a       <- ns.tuplespace.as(channel.pure[List]) if matchesAtIndex(patterns, a)
+      a       <- ns.tuplespace.as(channel.pure[List]) if matchExists(patterns, channel)
     } yield a
 
   def consume[A, K](ns: Storage[A, K], channels: Seq[Channel], patterns: Seq[Pattern], k: K): (Seq[(K, Seq[Pattern])], Seq[A]) = {
@@ -29,8 +29,8 @@ trait StorageActions {
                                                            keys: Seq[Seq[Channel]],
                                                            channel: Channel): Seq[(Seq[Channel], Int)] =
     for {
-      key       <- keys
-      (ptns, i) <- ns.tuplespace.ps(key).zipWithIndex if matchesAtIndex(ptns, channel)
+      key           <- keys
+      (patterns, i) <- ns.tuplespace.ps(key).zipWithIndex if matchExists(patterns, channel)
     } yield {
       (key, i)
     }
