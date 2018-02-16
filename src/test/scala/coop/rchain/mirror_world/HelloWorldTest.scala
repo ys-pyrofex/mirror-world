@@ -50,6 +50,6 @@ class HelloWorldTest extends FlatSpec with Matchers with OptionValues {
     test(testConsumer(capture(results)))
 
     dataAt(ns, Seq("helloworld")) shouldBe Nil
-    results.toList shouldBe Seq(Nil, Nil, Seq("Hello World"))
+    results.toList shouldBe Seq(Nil, Nil, Seq("world"), Seq("Hello World"))
   }
 }

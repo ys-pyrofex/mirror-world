@@ -110,6 +110,45 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
     results.toList shouldBe Seq(Nil, Seq("This is some data"))
   }
 
+  "A match experiment" should "work" in {
+
+    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
+    val results: mutable.ListBuffer[Seq[String]]  = mutable.ListBuffer.empty[Seq[String]]
+
+    val test: Test = for {
+      wk1 <- mconsume(Seq("hello", "world"), Seq(StringMatch("foo"), StringMatch("bar")), capture(results))
+      wk2 <- mproduce("foo", "This is some data")
+    } yield List(wk1, wk2)
+
+    test.run(ns).foreach(runKs)
+
+    dataAt(ns, Seq("hello", "world")) shouldBe Nil
+    dataAt(ns, Seq("foo")) shouldBe Nil
+    results.toList shouldBe Seq(Nil, Seq("This is some data"))
+  }
+
+  "Another match experiment" should "work" in {
+
+    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
+    val results1: mutable.ListBuffer[Seq[String]]  = mutable.ListBuffer.empty[Seq[String]]
+    val results2: mutable.ListBuffer[Seq[String]]  = mutable.ListBuffer.empty[Seq[String]]
+
+    val test: Test = for {
+      wk1 <- mconsume(Seq("hello", "world"), Seq(StringMatch("foo"), StringMatch("bar")), capture(results1))
+      wk2 <- mconsume(Seq("hello", "world"), Seq(StringMatch("zoo"), StringMatch("zaz")), capture(results2))
+      wk3 <- mproduce("bar", "This is some data")
+      wk4 <- mproduce("zaz", "This is some other data")
+    } yield List(wk1, wk2, wk3, wk4)
+
+    test.run(ns).foreach(runKs)
+
+    dataAt(ns, Seq("hello", "world")) shouldBe Nil
+    dataAt(ns, Seq("bar")) shouldBe Nil
+    dataAt(ns, Seq("zaz")) shouldBe Nil
+    results1.toList shouldBe Seq(Nil, Seq("This is some data"))
+    results2.toList shouldBe Seq(Nil, Seq("This is some other data"))
+  }
+
   "consume on multiple channels, consume on a same channel, produce" should "work" in {
 
     val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
