@@ -35,19 +35,18 @@ trait StorageActions {
       (key, i)
     }
 
-  private[mirror_world] def getContinuation[A, K](ns: Storage[A, K], chosenCandidate: (Seq[Channel], Int)): Option[(K, Seq[Pattern])] =
+  private[mirror_world] def getWaiters[A, K](ns: Storage[A, K], chosenCandidate: (Seq[Channel], Int)): Option[(K, Seq[Pattern])] =
     chosenCandidate match {
       case (channels, waitingContinuationIndex) =>
         ns.tuplespace.removeK(channels, waitingContinuationIndex)
     }
 
   def produce[A, K](ns: Storage[A, K], channel: Channel, data: A): (Seq[(K, Seq[Pattern])], Seq[A]) = {
-    val keyCandidates: Seq[Seq[Channel]]             = ns.tuplespace.keys.toList
-    val produceCandidates: Seq[(Seq[Channel], Int)]  = extractProduceCandidates(ns, keyCandidates, channel).reverse
-    val waitingContinuations: Seq[(K, Seq[Pattern])] = produceCandidates.flatMap(chosen => getContinuation(ns, chosen).toList)
-    if (waitingContinuations.isEmpty) {
+    val produceCandidates = extractProduceCandidates(ns, ns.tuplespace.keys.toList, channel).reverse
+    val waiters           = produceCandidates.flatMap(chosen => getWaiters(ns, chosen).toList)
+    if (waiters.isEmpty) {
       ns.tuplespace.putA(channel.pure[List], data)
     }
-    (waitingContinuations, data.pure[List])
+    (waiters, data.pure[List])
   }
 }
