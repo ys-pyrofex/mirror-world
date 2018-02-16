@@ -18,15 +18,15 @@ class HelloWorldTest extends FlatSpec with Matchers with OptionValues {
 
   type Continuation[A] = (Seq[A]) => Unit
 
-  def dataAt[A, K](ns: Storage[A, K], channels: Seq[Channel]): Option[Seq[A]] =
-    ns.tuplespace.get(channels).map(_.data)
+  def dataAt[A, K](ns: Storage[A, K], channels: Seq[Channel]): Seq[A] =
+    ns.tuplespace.as(channels)
 
-  def runKs(t: (Seq[WaitingContinuation[Continuation[String]]], Seq[String])): Unit =
+  def runKs(t: (Seq[(Continuation[String], Seq[Pattern])], Seq[String])): Unit =
     t match {
       case (waitingContinuations, data) =>
-        for (wk <- waitingContinuations) {
+        for ((wk, _) <- waitingContinuations) {
           logger.debug(s"runK: <lambda>($data)")
-          wk.k(data)
+          wk(data)
         }
     }
 
@@ -34,7 +34,7 @@ class HelloWorldTest extends FlatSpec with Matchers with OptionValues {
 
   "the hello world example" should "work" in {
 
-    val ns: Storage[String, Continuation[String]] = new Storage(mutable.Map.empty)
+    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty[String, Continuation[String]])
     val results: mutable.ListBuffer[Seq[String]]  = mutable.ListBuffer.empty[Seq[String]]
 
     def testConsumer(k: Continuation[String])(channels: Seq[String]): Unit = {
@@ -49,7 +49,7 @@ class HelloWorldTest extends FlatSpec with Matchers with OptionValues {
 
     test(testConsumer(capture(results)))
 
-    dataAt(ns, Seq("helloworld")).value shouldBe Nil
+    dataAt(ns, Seq("helloworld")) shouldBe Nil
     results.toList shouldBe Seq(Nil, Nil, Seq("Hello World"))
   }
 }

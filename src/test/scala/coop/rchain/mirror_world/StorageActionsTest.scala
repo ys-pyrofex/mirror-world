@@ -20,17 +20,17 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
 
   type Continuation[A] = (Seq[A]) => Unit
 
-  type Test = Reader[Storage[String, Continuation[String]], List[(Seq[WaitingContinuation[Continuation[String]]], Seq[String])]]
+  type Test = Reader[Storage[String, Continuation[String]], List[(Seq[(Continuation[String], Seq[Pattern])], Seq[String])]]
 
-  def dataAt[A, K](ns: Storage[A, K], channels: Seq[Channel]): Option[Seq[A]] =
-    ns.tuplespace.get(channels).map(_.data)
+  def dataAt[A, K](ns: Storage[A, K], channels: Seq[Channel]): Seq[A] =
+    ns.tuplespace.as(channels)
 
-  def runKs(t: (Seq[WaitingContinuation[Continuation[String]]], Seq[String])): Unit =
+  def runKs(t: (Seq[(Continuation[String], Seq[Pattern])], Seq[String])): Unit =
     t match {
       case (waitingContinuations, data) =>
-        for (wk <- waitingContinuations) {
+        for ((wk, _) <- waitingContinuations) {
           logger.debug(s"runK: <lambda>($data)")
-          wk.k(data)
+          wk(data)
         }
     }
 
@@ -38,16 +38,16 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
 
   "produce" should "work" in {
 
-    val ns: Storage[String, Continuation[String]] = new Storage(mutable.Map.empty)
+    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
 
     mproduce("hello", "world").map(runKs).run(ns)
 
-    dataAt(ns, Seq("hello")).value shouldBe Seq("world")
+    dataAt(ns, Seq("hello")) shouldBe Seq("world")
   }
 
   "produce, consume" should "work" in {
 
-    val ns: Storage[String, Continuation[String]] = new Storage(mutable.Map.empty)
+    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
     val results: mutable.ListBuffer[Seq[String]]  = mutable.ListBuffer.empty[Seq[String]]
 
     val test: Test = for {
@@ -57,13 +57,13 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
 
     test.run(ns).foreach(runKs)
 
-    dataAt(ns, Seq("hello")).value shouldBe Seq("world")
+    dataAt(ns, Seq("hello")) shouldBe Seq("world")
     results.toList shouldBe Seq(Seq("world"))
   }
 
   "produce, produce" should "work" in {
 
-    val ns: Storage[String, Continuation[String]] = new Storage(mutable.Map.empty)
+    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
 
     val test: Test = for {
       wk1 <- mproduce("hello", "world")
@@ -72,12 +72,12 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
 
     test.run(ns).foreach(runKs)
 
-    dataAt(ns, Seq("hello")).value shouldBe Seq("goodbye", "world")
+    dataAt(ns, Seq("hello")) shouldBe Seq("goodbye", "world")
   }
 
   "produce, produce, consume" should "work" in {
 
-    val ns: Storage[String, Continuation[String]] = new Storage(mutable.Map.empty)
+    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
     val results: mutable.ListBuffer[Seq[String]]  = mutable.ListBuffer.empty[Seq[String]]
 
     val test: Test = for {
@@ -89,13 +89,13 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
 
     test.run(ns).foreach(runKs)
 
-    dataAt(ns, Seq("hello")).value shouldBe Seq("goodbye", "hello", "world")
+    dataAt(ns, Seq("hello")) shouldBe Seq("goodbye", "hello", "world")
     results.toList shouldBe Seq(Seq("goodbye", "hello", "world"))
   }
 
   "consume on multiple channels, produce" should "work" in {
 
-    val ns: Storage[String, Continuation[String]] = new Storage(mutable.Map.empty)
+    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
     val results: mutable.ListBuffer[Seq[String]]  = mutable.ListBuffer.empty[Seq[String]]
 
     val test: Test = for {
@@ -105,13 +105,14 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
 
     test.run(ns).foreach(runKs)
 
-    dataAt(ns, Seq("hello", "world")).value shouldBe Nil
+    dataAt(ns, Seq("hello", "world")) shouldBe Nil
+    dataAt(ns, Seq("world")) shouldBe Nil
     results.toList shouldBe Seq(Nil, Seq("This is some data"))
   }
 
   "consume on multiple channels, consume on a same channel, produce" should "work" in {
 
-    val ns: Storage[String, Continuation[String]] = new Storage(mutable.Map.empty)
+    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
     val results1: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
     val results2: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
 
@@ -123,27 +124,29 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
 
     test.run(ns).foreach(runKs)
 
-    dataAt(ns, Seq("hello", "goodbye")).value shouldBe Nil
-    dataAt(ns, Seq("goodbye")).value shouldBe Nil
+    dataAt(ns, Seq("hello", "goodbye")) shouldBe Nil
+    dataAt(ns, Seq("goodbye")) shouldBe Nil
     results1.toList shouldBe Seq(Nil, Seq("This is some data"))
     results2.toList shouldBe Seq(Nil, Seq("This is some data"))
   }
 
   "consume on a channel, consume on same channel, produce" should "work" in {
 
-    val ns: Storage[String, Continuation[String]] = new Storage(mutable.Map.empty)
-    val results: mutable.ListBuffer[Seq[String]]  = mutable.ListBuffer.empty[Seq[String]]
+    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
+    val results1: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
+    val results2: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
 
     val test: Test = for {
-      wk1 <- mconsume(Seq("hello"), Seq(Wildcard), capture(results))
-      wk2 <- mconsume(Seq("hello"), Seq(StringMatch("hello")), capture(results))
+      wk1 <- mconsume(Seq("hello"), Seq(Wildcard), capture(results1))
+      wk2 <- mconsume(Seq("hello"), Seq(StringMatch("hello")), capture(results2))
       wk3 <- mproduce("hello", "This is some data")
       wk4 <- mproduce("hello", "This is some other data")
     } yield List(wk1, wk2, wk3, wk4)
 
     test.run(ns).foreach(runKs)
 
-    dataAt(ns, Seq("hello")).value shouldBe Nil
-    results.toList shouldBe Seq(Nil, Nil, Seq("This is some data"), Seq("This is some other data"))
+    dataAt(ns, Seq("hello")) shouldBe List("This is some other data")
+    results1.toList shouldBe Seq(Nil, Seq("This is some data"))
+    results2.toList shouldBe Seq(Nil, Seq("This is some data"))
   }
 }
