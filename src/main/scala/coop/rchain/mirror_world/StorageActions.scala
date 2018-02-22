@@ -12,7 +12,7 @@ trait StorageActions {
   private[mirror_world] def extractDataCandidates[A, K](ns: Storage[A, K], channels: Seq[Channel], patterns: Seq[Pattern]): Seq[A] =
     for {
       channel <- channels
-      a       <- ns.tuplespace.as(channel.pure[List]) if matchExists(patterns, channel)
+      a       <- ns.tuplespace.as(channel.pure[List]) if matchExists(patterns, a)
     } yield a
 
   def consume[A, K](ns: Storage[A, K], channels: Seq[Channel], patterns: Seq[Pattern], k: K): (Seq[(K, Seq[Pattern])], Seq[A]) = {
@@ -27,10 +27,11 @@ trait StorageActions {
 
   private[mirror_world] def extractProduceCandidates[A, K](ns: Storage[A, K],
                                                            keys: Seq[Seq[Channel]],
-                                                           channel: Channel): Seq[(Seq[Channel], Int)] =
+                                                           channel: Channel,
+                                                           data: A): Seq[(Seq[Channel], Int)] =
     for {
       key           <- keys
-      (patterns, i) <- ns.tuplespace.ps(key).zipWithIndex if matchExists(patterns, channel)
+      (patterns, i) <- ns.tuplespace.ps(key).zipWithIndex if matchExists(patterns, data)
     } yield {
       (key, i)
     }
@@ -42,7 +43,7 @@ trait StorageActions {
     }
 
   def produce[A, K](ns: Storage[A, K], channel: Channel, data: A): (Seq[(K, Seq[Pattern])], Seq[A]) = {
-    val produceCandidates = extractProduceCandidates(ns, ns.tuplespace.keys.toList, channel).reverse
+    val produceCandidates = extractProduceCandidates(ns, ns.tuplespace.keys.toList, channel, data).reverse
     val waiters           = produceCandidates.flatMap(chosen => getWaiters(ns, chosen).toList)
     if (waiters.isEmpty) {
       ns.tuplespace.putA(channel.pure[List], data)

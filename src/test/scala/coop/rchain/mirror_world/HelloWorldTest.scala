@@ -18,6 +18,10 @@ class HelloWorldTest extends FlatSpec with Matchers with OptionValues {
 
   type Continuation[A] = (Seq[A]) => Unit
 
+  implicit object continuationOrdering extends Ordering[Continuation[String]] {
+    def compare(x: Continuation[String], y: Continuation[String]): Int = 0
+  }
+
   def dataAt[A, K](ns: Storage[A, K], channels: Seq[Channel]): Seq[A] =
     ns.tuplespace.as(channels)
 

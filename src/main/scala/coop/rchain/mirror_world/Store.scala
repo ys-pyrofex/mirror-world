@@ -6,7 +6,7 @@ import scala.collection.mutable
 class Store[A, K] private (_keys: mutable.HashMap[String, Seq[Channel]],
                            _ps: mutable.HashMap[String, Seq[Seq[Pattern]]],
                            _as: mutable.HashMap[String, Seq[A]],
-                           _ks: mutable.HashMap[String, Seq[K]]) {
+                           _ks: mutable.HashMap[String, Seq[K]])(implicit sa: Ordering[A], sk: Ordering[K]) {
 
   def keys: Seq[Seq[Channel]]                       = _keys.values.toSeq
   def ps(channels: Seq[Channel]): Seq[Seq[Pattern]] = _ps.getOrElse(hashChannels(channels), Nil)
@@ -63,7 +63,7 @@ class Store[A, K] private (_keys: mutable.HashMap[String, Seq[Channel]],
 @SuppressWarnings(Array("org.wartremover.warts.MutableDataStructures"))
 object Store {
 
-  def empty[A, K]: Store[A, K] = new Store[A, K](
+  def empty[A, K](implicit sa: Ordering[A], sk: Ordering[K]): Store[A, K] = new Store[A, K](
     _keys = mutable.HashMap.empty[String, Seq[Channel]],
     _ps = mutable.HashMap.empty[String, Seq[Seq[Pattern]]],
     _as = mutable.HashMap.empty[String, Seq[A]],

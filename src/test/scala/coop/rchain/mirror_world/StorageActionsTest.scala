@@ -20,6 +20,10 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
 
   type Continuation[A] = (Seq[A]) => Unit
 
+  implicit object continuationOrdering extends Ordering[Continuation[String]] {
+    def compare(x: Continuation[String], y: Continuation[String]): Int = 0
+  }
+
   type Test = Reader[Storage[String, Continuation[String]], List[(Seq[(Continuation[String], Seq[Pattern])], Seq[String])]]
 
   def dataAt[A, K](ns: Storage[A, K], channels: Seq[Channel]): Seq[A] =
@@ -116,7 +120,7 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
     val results: mutable.ListBuffer[Seq[String]]  = mutable.ListBuffer.empty[Seq[String]]
 
     val test: Test = for {
-      wk1 <- mconsume(Seq("hello", "world"), Seq(StringMatch("foo"), StringMatch("bar")), capture(results))
+      wk1 <- mconsume(Seq("hello", "world"), Seq(StringMatch("This is some data")), capture(results))
       wk2 <- mproduce("foo", "This is some data")
     } yield List(wk1, wk2)
 
@@ -130,12 +134,12 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
   "Another match experiment" should "work" in {
 
     val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
-    val results1: mutable.ListBuffer[Seq[String]]  = mutable.ListBuffer.empty[Seq[String]]
-    val results2: mutable.ListBuffer[Seq[String]]  = mutable.ListBuffer.empty[Seq[String]]
+    val results1: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
+    val results2: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
 
     val test: Test = for {
-      wk1 <- mconsume(Seq("hello", "world"), Seq(StringMatch("foo"), StringMatch("bar")), capture(results1))
-      wk2 <- mconsume(Seq("hello", "world"), Seq(StringMatch("zoo"), StringMatch("zaz")), capture(results2))
+      wk1 <- mconsume(Seq("hello", "world"), Seq(StringMatch("This is some data")), capture(results1))
+      wk2 <- mconsume(Seq("hello", "world"), Seq(StringMatch("This is some other data")), capture(results2))
       wk3 <- mproduce("bar", "This is some data")
       wk4 <- mproduce("zaz", "This is some other data")
     } yield List(wk1, wk2, wk3, wk4)
@@ -156,7 +160,7 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
     val results2: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
 
     val test: Test = for {
-      wk1 <- mconsume(Seq("hello", "goodbye"), Seq(StringMatch("hello"), StringMatch("goodbye")), capture(results1))
+      wk1 <- mconsume(Seq("hello", "goodbye"), Seq(Wildcard), capture(results1))
       wk2 <- mconsume(Seq("goodbye"), Seq(Wildcard), capture(results2))
       wk3 <- mproduce("goodbye", "This is some data")
     } yield List(wk1, wk2, wk3)
@@ -177,7 +181,7 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
 
     val test: Test = for {
       wk1 <- mconsume(Seq("hello"), Seq(Wildcard), capture(results1))
-      wk2 <- mconsume(Seq("hello"), Seq(StringMatch("hello")), capture(results2))
+      wk2 <- mconsume(Seq("hello"), Seq(StringMatch("This is some data")), capture(results2))
       wk3 <- mproduce("hello", "This is some data")
       wk4 <- mproduce("hello", "This is some other data")
     } yield List(wk1, wk2, wk3, wk4)
