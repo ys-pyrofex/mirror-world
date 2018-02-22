@@ -2,7 +2,6 @@ package coop.rchain
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
-import javax.xml.bind.DatatypeConverter.printHexBinary
 
 package object mirror_world extends StorageActions {
 
@@ -19,8 +18,6 @@ package object mirror_world extends StorageActions {
   def hashString(s: String): Array[Byte] =
     hashBytes(s.getBytes(StandardCharsets.UTF_8))
 
-  def hashChannels(cs: Seq[String]): String =
-    printHexBinary(hashBytes(cs.flatMap(hashString).toArray))
 
   /** Drops the 'i'th element of a list.
     */

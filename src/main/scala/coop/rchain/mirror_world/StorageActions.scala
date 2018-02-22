@@ -4,50 +4,50 @@ import cats.implicits._
 
 trait StorageActions {
 
-  private[mirror_world] def matchExists[T](patterns: Seq[Pattern], matchCandidate: T)(implicit m: Matcher[Pattern, T]): Boolean =
-    patterns.exists((pattern: Pattern) => m.isMatch(pattern, matchCandidate))
+  private[mirror_world] def matchExists[P, A](patterns: Seq[P], matchCandidate: A)(implicit m: Matcher[P, A]): Boolean =
+    patterns.exists((P: P) => m.isMatch(P, matchCandidate))
 
   /* Consume */
 
-  private[mirror_world] def extractDataCandidates[A, K](ns: Storage[A, K], channels: Seq[Channel], patterns: Seq[Pattern]): Seq[A] =
+  private[mirror_world] def extractDataCandidates[C, P, A, K](store: Storage[C, P, A, K], cs: Seq[C], ps: Seq[P])(
+      implicit m: Matcher[P, A]): Seq[A] =
     for {
-      channel <- channels
-      a       <- ns.tuplespace.as(channel.pure[List]) if matchExists(patterns, a)
+      c <- cs
+      a <- store.tuplespace.as(c.pure[List]) if matchExists(ps, a)
     } yield a
 
-  def consume[A, K](ns: Storage[A, K], channels: Seq[Channel], patterns: Seq[Pattern], k: K): (Seq[(K, Seq[Pattern])], Seq[A]) = {
-    val extractedProducts: Seq[A] = extractDataCandidates(ns, channels, patterns)
+  def consume[C, P, A, K](store: Storage[C, P, A, K], cs: Seq[C], ps: Seq[P], k: K)(
+      implicit m: Matcher[P, A]): (Seq[(K, Seq[P])], Seq[A]) = {
+    val extractedProducts: Seq[A] = extractDataCandidates(store, cs, ps)
     if (extractedProducts.isEmpty) {
-      ns.tuplespace.putK(channels, patterns, k)
+      store.tuplespace.putK(cs, ps, k)
     }
-    ((k, patterns).pure[List], extractedProducts)
+    ((k, ps).pure[List], extractedProducts)
   }
 
   /* Produce */
 
-  private[mirror_world] def extractProduceCandidates[A, K](ns: Storage[A, K],
-                                                           keys: Seq[Seq[Channel]],
-                                                           channel: Channel,
-                                                           data: A): Seq[(Seq[Channel], Int)] =
+  private[mirror_world] def extractProduceCandidates[C, P, A, K](store: Storage[C, P, A, K], keys: Seq[Seq[C]], C: C, data: A)(
+      implicit m: Matcher[P, A]): Seq[(Seq[C], Int)] =
     for {
-      key           <- keys
-      (patterns, i) <- ns.tuplespace.ps(key).zipWithIndex if matchExists(patterns, data)
+      key     <- keys
+      (ps, i) <- store.tuplespace.ps(key).zipWithIndex if matchExists(ps, data)
     } yield {
       (key, i)
     }
 
-  private[mirror_world] def getWaiters[A, K](ns: Storage[A, K], chosenCandidate: (Seq[Channel], Int)): Option[(K, Seq[Pattern])] =
-    chosenCandidate match {
-      case (channels, waitingContinuationIndex) =>
-        ns.tuplespace.removeK(channels, waitingContinuationIndex)
+  private[mirror_world] def getWaiters[C, P, A, K](store: Storage[C, P, A, K], candidate: (Seq[C], Int)): Option[(K, Seq[P])] =
+    candidate match {
+      case (cs, waitingContinuationIndex) =>
+        store.tuplespace.removeK(cs, waitingContinuationIndex)
     }
 
-  def produce[A, K](ns: Storage[A, K], channel: Channel, data: A): (Seq[(K, Seq[Pattern])], Seq[A]) = {
-    val produceCandidates = extractProduceCandidates(ns, ns.tuplespace.keys.toList, channel, data).reverse
-    val waiters           = produceCandidates.flatMap(chosen => getWaiters(ns, chosen).toList)
+  def produce[C, P, A, K](store: Storage[C, P, A, K], c: C, a: A)(implicit m: Matcher[P, A]): (Seq[(K, Seq[P])], Seq[A]) = {
+    val produceCandidates = extractProduceCandidates(store, store.tuplespace.keys.toList, c, a).reverse
+    val waiters           = produceCandidates.flatMap(chosen => getWaiters(store, chosen).toList)
     if (waiters.isEmpty) {
-      ns.tuplespace.putA(channel.pure[List], data)
+      store.tuplespace.putA(c.pure[List], a)
     }
-    (waiters, data.pure[List])
+    (waiters, a.pure[List])
   }
 }

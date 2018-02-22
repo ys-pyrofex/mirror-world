@@ -1,48 +1,25 @@
 package coop.rchain.mirror_world
 
-import cats.data.Reader
-import coop.rchain.mirror_world.monadic._
-import coop.rchain.mirror_world.{ignore => ign}
+import cats.implicits._
+import coop.rchain.mirror_world.Matcher._
 import org.log4s._
 import org.scalatest._
 
 import scala.collection.mutable
 
 @SuppressWarnings(Array("org.wartremover.warts.MutableDataStructures", "org.wartremover.warts.NonUnitStatements"))
-class StorageActionsTest extends FlatSpec with Matchers with OptionValues with SequentialNestedSuiteExecution {
+class StorageActionsTest extends FlatSpec with Matchers with OptionValues with SequentialNestedSuiteExecution with StorageTestHelpers {
 
-  private val logger: Logger = getLogger
+  val logger: Logger = getLogger
 
   override def withFixture(test: NoArgTest): Outcome = {
     logger.debug(s"Test: ${test.name}")
     super.withFixture(test)
   }
 
-  type Continuation[A] = (Seq[A]) => Unit
-
-  implicit object continuationOrdering extends Ordering[Continuation[String]] {
-    def compare(x: Continuation[String], y: Continuation[String]): Int = 0
-  }
-
-  type Test = Reader[Storage[String, Continuation[String]], List[(Seq[(Continuation[String], Seq[Pattern])], Seq[String])]]
-
-  def dataAt[A, K](ns: Storage[A, K], channels: Seq[Channel]): Seq[A] =
-    ns.tuplespace.as(channels)
-
-  def runKs(t: (Seq[(Continuation[String], Seq[Pattern])], Seq[String])): Unit =
-    t match {
-      case (waitingContinuations, data) =>
-        for ((wk, _) <- waitingContinuations) {
-          logger.debug(s"runK: <lambda>($data)")
-          wk(data)
-        }
-    }
-
-  def capture[A](res: mutable.ListBuffer[Seq[A]]): Continuation[A] = (as: Seq[A]) => ign(res += as)
-
   "produce" should "work" in {
 
-    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
+    val ns: Storage[Channel, Pattern, String, Continuation[String]] = new Storage(Store.empty)
 
     mproduce("hello", "world").map(runKs).run(ns)
 
@@ -51,12 +28,12 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
 
   "produce, consume" should "work" in {
 
-    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
-    val results: mutable.ListBuffer[Seq[String]]  = mutable.ListBuffer.empty[Seq[String]]
+    val ns: Storage[Channel, Pattern, String, Continuation[String]] = new Storage(Store.empty)
+    val results: mutable.ListBuffer[Seq[String]]                   = mutable.ListBuffer.empty[Seq[String]]
 
     val test: Test = for {
       wk1 <- mproduce("hello", "world")
-      wk2 <- mconsume(Seq("hello"), Seq(Wildcard), capture(results))
+      wk2 <- mconsume(Seq("hello"), Seq[Pattern](Wildcard), capture(results))
     } yield List(wk1, wk2)
 
     test.run(ns).foreach(runKs)
@@ -67,7 +44,7 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
 
   "produce, produce" should "work" in {
 
-    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
+    val ns: Storage[Channel, Pattern, String, Continuation[String]] = new Storage(Store.empty)
 
     val test: Test = for {
       wk1 <- mproduce("hello", "world")
@@ -81,14 +58,14 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
 
   "produce, produce, consume" should "work" in {
 
-    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
-    val results: mutable.ListBuffer[Seq[String]]  = mutable.ListBuffer.empty[Seq[String]]
+    val ns: Storage[Channel, Pattern, String, Continuation[String]] = new Storage(Store.empty)
+    val results: mutable.ListBuffer[Seq[String]]                   = mutable.ListBuffer.empty[Seq[String]]
 
     val test: Test = for {
       wk1 <- mproduce("hello", "world")
       wk2 <- mproduce("hello", "hello")
       wk3 <- mproduce("hello", "goodbye")
-      wk4 <- mconsume(Seq("hello"), Seq(Wildcard), capture(results))
+      wk4 <- mconsume(Seq("hello"), Seq[Pattern](Wildcard), capture(results))
     } yield List(wk1, wk2, wk3, wk4)
 
     test.run(ns).foreach(runKs)
@@ -99,11 +76,11 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
 
   "consume on multiple channels, produce" should "work" in {
 
-    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
-    val results: mutable.ListBuffer[Seq[String]]  = mutable.ListBuffer.empty[Seq[String]]
+    val ns: Storage[Channel, Pattern, String, Continuation[String]] = new Storage(Store.empty)
+    val results: mutable.ListBuffer[Seq[String]]                   = mutable.ListBuffer.empty[Seq[String]]
 
     val test: Test = for {
-      wk1 <- mconsume(Seq("hello", "world"), Seq(Wildcard, Wildcard), capture(results))
+      wk1 <- mconsume(Seq("hello", "world"), Seq[Pattern](Wildcard, Wildcard), capture(results))
       wk2 <- mproduce("world", "This is some data")
     } yield List(wk1, wk2)
 
@@ -116,11 +93,11 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
 
   "A match experiment" should "work" in {
 
-    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
-    val results: mutable.ListBuffer[Seq[String]]  = mutable.ListBuffer.empty[Seq[String]]
+    val ns: Storage[Channel, Pattern, String, Continuation[String]] = new Storage(Store.empty)
+    val results: mutable.ListBuffer[Seq[String]]                   = mutable.ListBuffer.empty[Seq[String]]
 
     val test: Test = for {
-      wk1 <- mconsume(Seq("hello", "world"), Seq(StringMatch("This is some data")), capture(results))
+      wk1 <- mconsume(Seq("hello", "world"), Seq[Pattern](StringMatch("This is some data")), capture(results))
       wk2 <- mproduce("foo", "This is some data")
     } yield List(wk1, wk2)
 
@@ -133,13 +110,13 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
 
   "Another match experiment" should "work" in {
 
-    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
-    val results1: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
-    val results2: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
+    val ns: Storage[Channel, Pattern, String, Continuation[String]] = new Storage(Store.empty)
+    val results1: mutable.ListBuffer[Seq[String]]                  = mutable.ListBuffer.empty[Seq[String]]
+    val results2: mutable.ListBuffer[Seq[String]]                  = mutable.ListBuffer.empty[Seq[String]]
 
     val test: Test = for {
-      wk1 <- mconsume(Seq("hello", "world"), Seq(StringMatch("This is some data")), capture(results1))
-      wk2 <- mconsume(Seq("hello", "world"), Seq(StringMatch("This is some other data")), capture(results2))
+      wk1 <- mconsume(Seq("hello", "world"), Seq[Pattern](StringMatch("This is some data")), capture(results1))
+      wk2 <- mconsume(Seq("hello", "world"), Seq[Pattern](StringMatch("This is some other data")), capture(results2))
       wk3 <- mproduce("bar", "This is some data")
       wk4 <- mproduce("zaz", "This is some other data")
     } yield List(wk1, wk2, wk3, wk4)
@@ -155,13 +132,13 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
 
   "consume on multiple channels, consume on a same channel, produce" should "work" in {
 
-    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
-    val results1: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
-    val results2: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
+    val ns: Storage[Channel, Pattern, String, Continuation[String]] = new Storage(Store.empty)
+    val results1: mutable.ListBuffer[Seq[String]]                  = mutable.ListBuffer.empty[Seq[String]]
+    val results2: mutable.ListBuffer[Seq[String]]                  = mutable.ListBuffer.empty[Seq[String]]
 
     val test: Test = for {
-      wk1 <- mconsume(Seq("hello", "goodbye"), Seq(Wildcard), capture(results1))
-      wk2 <- mconsume(Seq("goodbye"), Seq(Wildcard), capture(results2))
+      wk1 <- mconsume(Seq("hello", "goodbye"), Seq[Pattern](Wildcard), capture(results1))
+      wk2 <- mconsume(Seq("goodbye"), Seq[Pattern](Wildcard), capture(results2))
       wk3 <- mproduce("goodbye", "This is some data")
     } yield List(wk1, wk2, wk3)
 
@@ -175,13 +152,13 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
 
   "consume on a channel, consume on same channel, produce" should "work" in {
 
-    val ns: Storage[String, Continuation[String]] = new Storage(Store.empty)
-    val results1: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
-    val results2: mutable.ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
+    val ns: Storage[Channel, Pattern, String, Continuation[String]] = new Storage(Store.empty)
+    val results1: mutable.ListBuffer[Seq[String]]                  = mutable.ListBuffer.empty[Seq[String]]
+    val results2: mutable.ListBuffer[Seq[String]]                  = mutable.ListBuffer.empty[Seq[String]]
 
     val test: Test = for {
-      wk1 <- mconsume(Seq("hello"), Seq(Wildcard), capture(results1))
-      wk2 <- mconsume(Seq("hello"), Seq(StringMatch("This is some data")), capture(results2))
+      wk1 <- mconsume(Seq("hello"), Seq[Pattern](Wildcard), capture(results1))
+      wk2 <- mconsume(Seq("hello"), Seq[Pattern](StringMatch("This is some data")), capture(results2))
       wk3 <- mproduce("hello", "This is some data")
       wk4 <- mproduce("hello", "This is some other data")
     } yield List(wk1, wk2, wk3, wk4)
