@@ -28,10 +28,6 @@ trait StorageTestHelpers {
     : Reader[Storage[Channel, Pattern, String, Continuation[String]], (Seq[(Continuation[String], Seq[Pattern])], Seq[String])] =
     ReaderT(produce[Channel, Pattern, String, Continuation[String]](_, channel, data).pure[Id])
 
-  implicit object continuationOrdering extends Ordering[Continuation[String]] {
-    def compare(x: Continuation[String], y: Continuation[String]): Int = 0
-  }
-
   implicit object stringSerializer extends Serialize[String] {
     def encode(a: String): Array[Byte]     = a.getBytes(StandardCharsets.UTF_8)
     def decode(bytes: Array[Byte]): String = new String(bytes, StandardCharsets.UTF_8)

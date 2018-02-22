@@ -8,10 +8,7 @@ import scala.collection.mutable
 class Store[C, P, A, K] private (_keys: mutable.HashMap[String, Seq[C]],
                                  _ps: mutable.HashMap[String, Seq[Seq[P]]],
                                  _as: mutable.HashMap[String, Seq[A]],
-                                 _ks: mutable.HashMap[String, Seq[K]])(implicit
-                                                                       oa: Ordering[A],
-                                                                       ok: Ordering[K],
-                                                                       sc: Serialize[C]) {
+                                 _ks: mutable.HashMap[String, Seq[K]])(implicit sc: Serialize[C]) {
 
   def hashC(cs: Seq[C])(implicit sc: Serialize[C]): String =
     printHexBinary(hashBytes(cs.flatMap(sc.encode).toArray))
@@ -71,10 +68,7 @@ class Store[C, P, A, K] private (_keys: mutable.HashMap[String, Seq[C]],
 @SuppressWarnings(Array("org.wartremover.warts.MutableDataStructures"))
 object Store {
 
-  def empty[C, P, A, K](implicit
-                        oa: Ordering[A],
-                        ok: Ordering[K],
-                        sc: Serialize[C]): Store[C, P, A, K] = new Store[C, P, A, K](
+  def empty[C, P, A, K](implicit sc: Serialize[C]): Store[C, P, A, K] = new Store[C, P, A, K](
     _keys = mutable.HashMap.empty[String, Seq[C]],
     _ps = mutable.HashMap.empty[String, Seq[Seq[P]]],
     _as = mutable.HashMap.empty[String, Seq[A]],
