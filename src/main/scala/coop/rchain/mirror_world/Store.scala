@@ -5,63 +5,62 @@ import javax.xml.bind.DatatypeConverter.printHexBinary
 import scala.collection.mutable
 
 @SuppressWarnings(Array("org.wartremover.warts.MutableDataStructures"))
-class Store[C, P, A, K] private (_keys: mutable.HashMap[String, Seq[C]],
-                                 _ps: mutable.HashMap[String, Seq[Seq[P]]],
-                                 _as: mutable.HashMap[String, Seq[A]],
-                                 _ks: mutable.HashMap[String, Seq[K]])(implicit sc: Serialize[C]) {
+class Store[C, P, A, K] private (_keys: mutable.HashMap[String, List[C]],
+                                 _ps: mutable.HashMap[String, List[P]],
+                                 _as: mutable.HashMap[String, List[A]],
+                                 _k: mutable.HashMap[String, K])(implicit sc: Serialize[C]) {
 
-  def hashC(cs: Seq[C])(implicit sc: Serialize[C]): String =
+  def getK(curr: List[C]): Option[(List[P], K)] = {
+    val key = hashC(curr)
+    for {
+      ps <- _ps.get(key)
+      k  <- _k.get(key)
+    } yield (ps, k)
+  }
+
+  def hashC(cs: List[C])(implicit sc: Serialize[C]): String =
     printHexBinary(hashBytes(cs.flatMap(sc.encode).toArray))
 
-  def keys: Seq[Seq[C]]                 = _keys.values.toSeq
-  def ps(channels: Seq[C]): Seq[Seq[P]] = _ps.getOrElse(hashC(channels), Nil)
-  def as(channels: Seq[C]): Seq[A]      = _as.getOrElse(hashC(channels), Nil)
-  def ks(channels: Seq[C]): Seq[K]      = _ks.getOrElse(hashC(channels), Nil)
+  def ps(channels: List[C]): List[P] = _ps.getOrElse(hashC(channels), Nil)
+  def as(channels: List[C]): List[A] = _as.getOrElse(hashC(channels), Nil)
 
-  private def addKey(channels: Seq[C]): Unit =
+  private def addKey(channels: List[C]): Unit =
     _keys.update(hashC(channels), channels)
 
-  def removeA(channels: Seq[C], index: Int): Option[A] = {
+  def removeA(channels: List[C], index: Int): Unit = {
     val key = hashC(channels)
     for {
       _  <- _keys.get(key)
       as <- _as.get(key)
-    } yield {
-      val (a, nas) = extractIndex(as, index)
-      _as.update(key, nas)
-      a
+    } {
+      _as.update(key, dropIndex(as, index))
     }
   }
 
-  def removeK(channels: Seq[C], index: Int): Option[(K, Seq[P])] = {
+  def removeK(channels: List[C], index: Int): Unit = {
     val key = hashC(channels)
     for {
       _  <- _keys.get(key)
       ps <- _ps.get(key)
-      ks <- _ks.get(key)
-    } yield {
-      val (p, nps) = extractIndex(ps, index)
-      val (k, nks) = extractIndex(ks, index)
-      _ps.update(key, nps)
-      _ks.update(key, nks)
-      (k, p)
+    } {
+      _ps.update(key, dropIndex(ps, index))
+      _k.remove(key)
     }
   }
 
-  def putA(channels: Seq[C], a: A): Unit = {
+  def putA(channels: List[C], a: A): Unit = {
     val key = hashC(channels)
     addKey(channels)
-    val as = _as.getOrElseUpdate(key, Seq.empty[A])
+    val as = _as.getOrElseUpdate(key, List.empty[A])
     _as.update(key, a +: as)
   }
 
-  def putK(channels: Seq[C], patterns: Seq[P], k: K): Unit = {
+  def putK(channels: List[C], patterns: List[P], k: K): Unit = {
     val key = hashC(channels)
     addKey(channels)
-    val ps = _ps.getOrElseUpdate(key, Seq.empty[Seq[P]])
-    val ks = _ks.getOrElseUpdate(key, Seq.empty[K])
-    _ps.update(key, patterns +: ps)
-    _ks.update(key, k +: ks)
+    val ps = _ps.getOrElseUpdate(key, List.empty[P])
+    _ps.update(key, patterns ++ ps)
+    _k.update(key, k)
   }
 }
 
@@ -69,9 +68,9 @@ class Store[C, P, A, K] private (_keys: mutable.HashMap[String, Seq[C]],
 object Store {
 
   def empty[C, P, A, K](implicit sc: Serialize[C]): Store[C, P, A, K] = new Store[C, P, A, K](
-    _keys = mutable.HashMap.empty[String, Seq[C]],
-    _ps = mutable.HashMap.empty[String, Seq[Seq[P]]],
-    _as = mutable.HashMap.empty[String, Seq[A]],
-    _ks = mutable.HashMap.empty[String, Seq[K]]
+    _keys = mutable.HashMap.empty[String, List[C]],
+    _ps = mutable.HashMap.empty[String, List[P]],
+    _as = mutable.HashMap.empty[String, List[A]],
+    _k = mutable.HashMap.empty[String, K]
   )
 }

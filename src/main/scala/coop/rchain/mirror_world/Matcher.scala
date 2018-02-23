@@ -2,10 +2,13 @@ package coop.rchain.mirror_world
 
 trait Matcher[A, B] {
 
-  def isMatch(a: A, b: B): Boolean
+  def isMatch(a: A, b: B): Option[B]
 }
 
 object Matcher {
 
-  implicit def patternTMatcher[T]: Matcher[Pattern, T] = _.isMatch(_)
+  @SuppressWarnings(Array("org.wartremover.warts.Any"))
+  implicit object stringMatcher extends Matcher[Pattern, String] {
+    def isMatch(a: Pattern, b: String): Option[String] = Some(b).filter(a.isMatch)
+  }
 }

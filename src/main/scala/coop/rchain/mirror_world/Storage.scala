@@ -1,3 +1,5 @@
 package coop.rchain.mirror_world
 
-final class Storage[C, P, A, K](val tuplespace: Store[C, P, A, K])
+import scala.collection.mutable
+
+final class Storage[C, P, A, K](val tuplespace: Store[C, P, A, K], val joinMap: mutable.MultiMap[C, List[C]])
