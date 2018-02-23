@@ -6,11 +6,11 @@ trait StorageActions {
 
   /* Consume */
 
-  private[mirror_world] def extractDataCandidates[C, P, A, K](store: Storage[C, P, A, K], cs: List[C], ps: List[P])(
+  private[mirror_world] def extractDataCandidates[C, P, A, K](store: Store[C, P, A, K], cs: List[C], ps: List[P])(
       implicit m: Matcher[P, A]): Option[List[(A, C, Int)]] = {
     val options = cs.zip(ps).map {
       case (c, p) =>
-        val as: Seq[(A, Int)] = store.tuplespace.getAs(c.pure[List]).zipWithIndex
+        val as: Seq[(A, Int)] = store.getAs(c.pure[List]).zipWithIndex
         as.foldRight(None: Option[(A, C, Int)]) {
           case ((a, i), acc) =>
             m.isMatch(p, a) match {
@@ -22,17 +22,17 @@ trait StorageActions {
     options.sequence[Option, (A, C, Int)]
   }
 
-  def consume[C, P, A, K](store: Storage[C, P, A, K], cs: List[C], ps: List[P], k: K)(implicit m: Matcher[P, A]): Option[(K, List[A])] = {
+  def consume[C, P, A, K](store: Store[C, P, A, K], cs: List[C], ps: List[P], k: K)(implicit m: Matcher[P, A]): Option[(K, List[A])] = {
     extractDataCandidates(store, cs, ps) match {
       case None =>
-        store.tuplespace.putK(cs, ps, k)
+        store.putK(cs, ps, k)
         for (c <- cs) store.joinMap.addBinding(c, cs)
         None
       case Some(acis) =>
         acis.foreach {
-          case (a, c, i) =>
-            store.tuplespace.removeA(c.pure[List], i)
-            store.tuplespace.removeK(cs, i)
+          case (_, c, i) =>
+            store.removeA(c.pure[List], i)
+            store.removeK(cs, i)
             ignore { store.joinMap.removeBinding(c, cs) }
         }
         Some((k, acis.map(_._1)))
@@ -41,10 +41,10 @@ trait StorageActions {
 
   /* Produce */
 
-  private[mirror_world] def extractProduceCandidates[C, P, A, K](store: Storage[C, P, A, K], groupedKeys: List[List[C]], c: C, data: A)(
+  private[mirror_world] def extractProduceCandidates[C, P, A, K](store: Store[C, P, A, K], groupedKeys: List[List[C]], c: C, data: A)(
       implicit m: Matcher[P, A]): Option[(K, List[(A, C, Int)])] = {
     groupedKeys.foldRight(None: Option[(K, List[(A, C, Int)])]) { (cs: List[C], acc) =>
-      store.tuplespace.getK(cs).flatMap {
+      store.getK(cs).flatMap {
         case (ps, k) =>
           extractDataCandidates(store, c.pure[List], ps) match {
             case None       => acc
@@ -54,16 +54,16 @@ trait StorageActions {
     }
   }
 
-  def produce[C, P, A, K](store: Storage[C, P, A, K], channel: C, data: A)(implicit m: Matcher[P, A]): Option[(K, List[A])] = {
+  def produce[C, P, A, K](store: Store[C, P, A, K], channel: C, data: A)(implicit m: Matcher[P, A]): Option[(K, List[A])] = {
     val ss: List[List[C]] = store.joinMap.get(channel).toList.flatten
-    store.tuplespace.putA(channel.pure[List], data)
+    store.putA(channel.pure[List], data)
     extractProduceCandidates(store, ss, channel, data).map {
       case (k, acis) =>
         acis.foreach {
           case (_, c, i) =>
-            store.tuplespace.removeA(c.pure[List], i)
+            store.removeA(c.pure[List], i)
             ignore { store.joinMap.remove(c) }
-            store.tuplespace.removeK(c.pure[List], i)
+            store.removeK(c.pure[List], i)
         }
         (k, acis.map(_._1))
     }

@@ -8,7 +8,8 @@ import scala.collection.mutable
 class Store[C, P, A, K] private (_keys: mutable.HashMap[String, List[C]],
                                  _ps: mutable.HashMap[String, List[P]],
                                  _as: mutable.HashMap[String, List[A]],
-                                 _k: mutable.HashMap[String, K])(implicit sc: Serialize[C]) {
+                                 _k: mutable.HashMap[String, K],
+                                 val joinMap: mutable.MultiMap[C, List[C]])(implicit sc: Serialize[C]) {
 
   def hashC(cs: List[C])(implicit sc: Serialize[C]): String =
     printHexBinary(hashBytes(cs.flatMap(sc.encode).toArray))
@@ -65,6 +66,7 @@ object Store {
     _keys = mutable.HashMap.empty[String, List[C]],
     _ps = mutable.HashMap.empty[String, List[P]],
     _as = mutable.HashMap.empty[String, List[A]],
-    _k = mutable.HashMap.empty[String, K]
+    _k = mutable.HashMap.empty[String, K],
+    joinMap = new mutable.HashMap[C, mutable.Set[List[C]]] with mutable.MultiMap[C, List[C]]
   )
 }

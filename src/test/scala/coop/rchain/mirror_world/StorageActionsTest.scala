@@ -9,13 +9,7 @@ import scala.collection.mutable
 
 @SuppressWarnings(
   Array("org.wartremover.warts.MutableDataStructures", "org.wartremover.warts.NonUnitStatements", "org.wartremover.warts.Nothing"))
-class StorageActionsTest
-    extends FlatSpec
-    with Matchers
-    with OptionValues
-    with SequentialNestedSuiteExecution
-    with StorageTestHelpers
-    with StorageFixtures {
+class StorageActionsTest extends FlatSpec with Matchers with OptionValues with SequentialNestedSuiteExecution with StorageTestHelpers {
 
   val logger: Logger = getLogger
 
@@ -24,15 +18,17 @@ class StorageActionsTest
     super.withFixture(test)
   }
 
-  val withStorage: (Storage[Channel, Pattern, String, Continuation[String]] => Unit) => Unit =
-    withTestStorage[Channel, Pattern, String, Continuation[String]]
+  def withTestStorage(f: Store[Channel, Pattern, String, Continuation[String]] => Unit)(implicit sc: Serialize[Channel]): Unit = {
+    val ns: Store[Channel, Pattern, String, Continuation[String]] = Store.empty
+    f(ns)
+  }
 
-  "produce" should "work" in withStorage { ns =>
+  "produce" should "work" in withTestStorage { ns =>
     runKs(produce(ns, "hello", "world"))
     dataAt(ns, List("hello")) shouldBe List("world")
   }
 
-  "produce, consume" should "work" in withStorage { ns =>
+  "produce, consume" should "work" in withTestStorage { ns =>
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
     val wk1 = produce(ns, "hello", "world")
@@ -46,7 +42,7 @@ class StorageActionsTest
     results.toList shouldBe List(List("world"))
   }
 
-  "produce, produce" should "work" in withStorage { ns =>
+  "produce, produce" should "work" in withTestStorage { ns =>
     val wk1 = produce(ns, "hello", "world")
     val wk2 = produce(ns, "hello", "goodbye")
 
@@ -57,7 +53,7 @@ class StorageActionsTest
     dataAt(ns, List("hello")) shouldBe List("goodbye", "world")
   }
 
-  "produce, produce, produce, consume" should "work" in withStorage { ns =>
+  "produce, produce, produce, consume" should "work" in withTestStorage { ns =>
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
     val wk1 = produce(ns, "ch1", "world")
@@ -73,7 +69,7 @@ class StorageActionsTest
     results.toList shouldBe List(List("goodbye"))
   }
 
-  "produce ch1, consume" should "work" in withStorage { ns =>
+  "produce ch1, consume" should "work" in withTestStorage { ns =>
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
     val wk1 = produce(ns, "ch1", "hello")
@@ -87,7 +83,7 @@ class StorageActionsTest
     results.toList shouldBe List(List("hello"))
   }
 
-  "produce ch1, produce ch2, produce ch2, consume ch1 ch2 ch3, consume ch2 ch3, consume ch3" should "work" in withStorage { ns =>
+  "produce ch1, produce ch2, produce ch2, consume ch1 ch2 ch3, consume ch2 ch3, consume ch3" should "work" in withTestStorage { ns =>
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
     val wk1 = produce(ns, "ch1", "hello")
@@ -106,7 +102,7 @@ class StorageActionsTest
     results.toList shouldBe List(List("hello"), List("world"), List("goodbye"))
   }
 
-  "produce, produce, produce, consume, consume, consume" should "work" in withStorage { ns =>
+  "produce, produce, produce, consume, consume, consume" should "work" in withTestStorage { ns =>
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
     val wk1 = produce(ns, "ch1", "world")
@@ -125,7 +121,7 @@ class StorageActionsTest
     results shouldBe List(List("goodbye"), List("hello"), List("world"))
   }
 
-  "consume on multiple channels, produce" should "work" in withStorage { ns =>
+  "consume on multiple channels, produce" should "work" in withTestStorage { ns =>
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
     val wk1 = consume(ns, List("hello", "world"), List(Wildcard), capture(results))
@@ -139,10 +135,8 @@ class StorageActionsTest
     results.toList shouldBe List(List("This is some data"))
   }
 
-  "A match experiment" should "work" in {
-
-    val ns: Storage[Channel, Pattern, String, Continuation[String]] = new Storage(Store.empty, mm[Channel])
-    val results: mutable.ListBuffer[List[String]]                   = mutable.ListBuffer.empty[List[String]]
+  "A match experiment" should "work" in withTestStorage { ns =>
+    val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
     val wk1  = consume(ns, List("hello", "world"), List(StringMatch("This is some data")), capture(results))
     val wk2  = produce(ns, "foo", "This is some data")
@@ -154,11 +148,9 @@ class StorageActionsTest
     dataAt(ns, List("foo")) shouldBe List("This is some data")
   }
 
-  "Another match experiment" should "work" in {
-
-    val ns: Storage[Channel, Pattern, String, Continuation[String]] = new Storage(Store.empty, mm[Channel])
-    val results1: mutable.ListBuffer[List[String]]                  = mutable.ListBuffer.empty[List[String]]
-    val results2: mutable.ListBuffer[List[String]]                  = mutable.ListBuffer.empty[List[String]]
+  "Another match experiment" should "work" in withTestStorage { ns =>
+    val results1: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
+    val results2: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
     val wk1  = consume(ns, List("hello"), List(StringMatch("This is some data")), capture(results1))
     val wk2  = consume(ns, List("world"), List(StringMatch("This is some other data")), capture(results2))
@@ -174,11 +166,9 @@ class StorageActionsTest
     results2.toList shouldBe List(List("This is some other data"))
   }
 
-  "consume on multiple channels, consume on a same channel, produce" should "work" in {
-
-    val ns: Storage[Channel, Pattern, String, Continuation[String]] = new Storage(Store.empty, mm[Channel])
-    val results1: mutable.ListBuffer[List[String]]                  = mutable.ListBuffer.empty[List[String]]
-    val results2: mutable.ListBuffer[List[String]]                  = mutable.ListBuffer.empty[List[String]]
+  "consume on multiple channels, consume on a same channel, produce" should "work" in withTestStorage { ns =>
+    val results1: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
+    val results2: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
     val wk1  = consume(ns, List("hello", "goodbye"), List(Wildcard), capture(results1))
     val wk2  = consume(ns, List("goodbye"), List(Wildcard), capture(results2))
@@ -194,11 +184,9 @@ class StorageActionsTest
     results2.toList shouldBe List(List("This is some other data"))
   }
 
-  "consume on a channel, consume on same channel, produce" should "work" in {
-
-    val ns: Storage[Channel, Pattern, String, Continuation[String]] = new Storage(Store.empty, mm[Channel])
-    val results1: mutable.ListBuffer[List[String]]                  = mutable.ListBuffer.empty[List[String]]
-    val results2: mutable.ListBuffer[List[String]]                  = mutable.ListBuffer.empty[List[String]]
+  "consume on a channel, consume on same channel, produce" should "work" in withTestStorage { ns =>
+    val results1: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
+    val results2: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
     val wk1  = consume(ns, List("hello"), List(Wildcard), capture(results1))
     val wk2  = consume(ns, List("hello"), List(StringMatch("This is some data")), capture(results2))

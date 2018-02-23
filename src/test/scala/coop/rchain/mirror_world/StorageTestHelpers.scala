@@ -22,8 +22,8 @@ trait StorageTestHelpers {
     def decode(bytes: Array[Byte]): String = new String(bytes, StandardCharsets.UTF_8)
   }
 
-  def dataAt[P, A, K](ns: Storage[Channel, P, A, K], channels: List[Channel]): List[A] =
-    ns.tuplespace.getAs(channels)
+  def dataAt[P, A, K](ns: Store[Channel, P, A, K], channels: List[Channel]): List[A] =
+    ns.getAs(channels)
 
   def runKs(t: Option[(Continuation[String], List[String])]): Unit =
     t match {
