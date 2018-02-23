@@ -94,7 +94,6 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
     val wk6 = consume(ns, List("ch3"), List(Wildcard), capture(results))
 
     val test = List(wk1, wk2, wk3, wk4, wk5, wk6)
-    println(test)
 
     test.foreach(runKs)
 
@@ -115,7 +114,6 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
     val test = List(wk1, wk2, wk3, wk4, wk5, wk6)
 
     test.foreach(runKs)
-    println(test)
 
     dataAt(ns, List("hello")) shouldBe Nil
     results shouldBe List(List("goodbye"), List("hello"), List("world"))
