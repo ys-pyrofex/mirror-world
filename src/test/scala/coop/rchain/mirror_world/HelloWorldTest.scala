@@ -18,22 +18,22 @@ class HelloWorldTest extends FlatSpec with Matchers with OptionValues with Stora
 
   "the hello world example" should "work" in {
 
-    val ns: Store[Channel, Pattern, String, Continuation[String]] = Store.empty
-    val results: mutable.ListBuffer[List[String]]                 = mutable.ListBuffer.empty[List[String]]
+    val store: Store[Channel, Pattern, String, Continuation[String]] = Store.empty
+    val results: mutable.ListBuffer[List[String]]                    = mutable.ListBuffer.empty[List[String]]
 
     def testConsumer(k: Continuation[String])(channels: List[String]): Unit = {
-      runKs(consume(ns, channels, List(Wildcard), k))
+      runKs(consume(store, channels, List(Wildcard), k))
     }
 
     def test(k: Continuation[String]): Unit = {
-      runKs(consume(ns, List("helloworld"), List(Wildcard), k))
-      runKs(produce(ns, "helloworld", "world"))
-      runKs(produce(ns, "world", "Hello World"))
+      runKs(consume(store, List("helloworld"), List(Wildcard), k))
+      runKs(produce(store, "helloworld", "world"))
+      runKs(produce(store, "world", "Hello World"))
     }
 
     test(testConsumer(capture(results)))
 
-    dataAt(ns, List("helloworld")) shouldBe Nil
+    store.getAs(List("helloworld")) shouldBe Nil
     results.toList shouldBe List(List("Hello World"))
   }
 }

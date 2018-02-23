@@ -19,182 +19,182 @@ class StorageActionsTest extends FlatSpec with Matchers with OptionValues with S
   }
 
   def withTestStorage(f: Store[Channel, Pattern, String, Continuation[String]] => Unit)(implicit sc: Serialize[Channel]): Unit = {
-    val ns: Store[Channel, Pattern, String, Continuation[String]] = Store.empty
-    f(ns)
+    val store: Store[Channel, Pattern, String, Continuation[String]] = Store.empty
+    f(store)
   }
 
-  "produce" should "work" in withTestStorage { ns =>
-    runKs(produce(ns, "hello", "world"))
-    dataAt(ns, List("hello")) shouldBe List("world")
+  "produce" should "work" in withTestStorage { store =>
+    runKs(produce(store, "hello", "world"))
+    store.getAs(List("hello")) shouldBe List("world")
   }
 
-  "produce, consume" should "work" in withTestStorage { ns =>
+  "produce, consume" should "work" in withTestStorage { store =>
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    val wk1 = produce(ns, "hello", "world")
-    val wk2 = consume(ns, List("hello"), List(Wildcard), capture(results))
+    val wk1 = produce(store, "hello", "world")
+    val wk2 = consume(store, List("hello"), List(Wildcard), capture(results))
 
     val test = List(wk1, wk2)
 
     test.foreach(runKs)
 
-    dataAt(ns, List("hello")) shouldBe Nil
+    store.getAs(List("hello")) shouldBe Nil
     results.toList shouldBe List(List("world"))
   }
 
-  "produce, produce" should "work" in withTestStorage { ns =>
-    val wk1 = produce(ns, "hello", "world")
-    val wk2 = produce(ns, "hello", "goodbye")
+  "produce, produce" should "work" in withTestStorage { store =>
+    val wk1 = produce(store, "hello", "world")
+    val wk2 = produce(store, "hello", "goodbye")
 
     val test = List(wk1, wk2)
 
     test.foreach(runKs)
 
-    dataAt(ns, List("hello")) shouldBe List("goodbye", "world")
+    store.getAs(List("hello")) shouldBe List("goodbye", "world")
   }
 
-  "produce, produce, produce, consume" should "work" in withTestStorage { ns =>
+  "produce, produce, produce, consume" should "work" in withTestStorage { store =>
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    val wk1 = produce(ns, "ch1", "world")
-    val wk2 = produce(ns, "ch1", "hello")
-    val wk3 = produce(ns, "ch1", "goodbye")
-    val wk4 = consume(ns, List("ch1", "ch2", "ch3"), List(Wildcard), capture(results))
+    val wk1 = produce(store, "ch1", "world")
+    val wk2 = produce(store, "ch1", "hello")
+    val wk3 = produce(store, "ch1", "goodbye")
+    val wk4 = consume(store, List("ch1", "ch2", "ch3"), List(Wildcard), capture(results))
 
     val test = List(wk1, wk2, wk3, wk4)
 
     test.foreach(runKs)
 
-    dataAt(ns, List("ch1")) shouldBe List("hello", "world")
+    store.getAs(List("ch1")) shouldBe List("hello", "world")
     results.toList shouldBe List(List("goodbye"))
   }
 
-  "produce ch1, consume" should "work" in withTestStorage { ns =>
+  "produce ch1, consume" should "work" in withTestStorage { store =>
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    val wk1 = produce(ns, "ch1", "hello")
-    val wk2 = consume(ns, List("ch1", "ch2", "ch3"), List(Wildcard), capture(results))
+    val wk1 = produce(store, "ch1", "hello")
+    val wk2 = consume(store, List("ch1", "ch2", "ch3"), List(Wildcard), capture(results))
 
     val test = List(wk1, wk2)
 
     test.foreach(runKs)
 
-    dataAt(ns, List("ch1")) shouldBe Nil
+    store.getAs(List("ch1")) shouldBe Nil
     results.toList shouldBe List(List("hello"))
   }
 
-  "produce ch1, produce ch2, produce ch2, consume ch1 ch2 ch3, consume ch2 ch3, consume ch3" should "work" in withTestStorage { ns =>
+  "produce ch1, produce ch2, produce ch2, consume ch1 ch2 ch3, consume ch2 ch3, consume ch3" should "work" in withTestStorage { store =>
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    val wk1 = produce(ns, "ch1", "hello")
-    val wk2 = produce(ns, "ch2", "world")
-    val wk3 = produce(ns, "ch3", "goodbye")
-    val wk4 = consume(ns, List("ch1", "ch2", "ch3"), List(Wildcard), capture(results))
-    val wk5 = consume(ns, List("ch2", "ch3"), List(Wildcard), capture(results))
-    val wk6 = consume(ns, List("ch3"), List(Wildcard), capture(results))
+    val wk1 = produce(store, "ch1", "hello")
+    val wk2 = produce(store, "ch2", "world")
+    val wk3 = produce(store, "ch3", "goodbye")
+    val wk4 = consume(store, List("ch1", "ch2", "ch3"), List(Wildcard), capture(results))
+    val wk5 = consume(store, List("ch2", "ch3"), List(Wildcard), capture(results))
+    val wk6 = consume(store, List("ch3"), List(Wildcard), capture(results))
 
     val test = List(wk1, wk2, wk3, wk4, wk5, wk6)
 
     test.foreach(runKs)
 
-    dataAt(ns, List("ch1")) shouldBe Nil
+    store.getAs(List("ch1")) shouldBe Nil
     results.toList shouldBe List(List("hello"), List("world"), List("goodbye"))
   }
 
-  "produce, produce, produce, consume, consume, consume" should "work" in withTestStorage { ns =>
+  "produce, produce, produce, consume, consume, consume" should "work" in withTestStorage { store =>
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    val wk1 = produce(ns, "ch1", "world")
-    val wk2 = produce(ns, "ch1", "hello")
-    val wk3 = produce(ns, "ch1", "goodbye")
-    val wk4 = consume(ns, List("ch1"), List(Wildcard), capture(results))
-    val wk5 = consume(ns, List("ch1"), List(Wildcard), capture(results))
-    val wk6 = consume(ns, List("ch1"), List(Wildcard), capture(results))
+    val wk1 = produce(store, "ch1", "world")
+    val wk2 = produce(store, "ch1", "hello")
+    val wk3 = produce(store, "ch1", "goodbye")
+    val wk4 = consume(store, List("ch1"), List(Wildcard), capture(results))
+    val wk5 = consume(store, List("ch1"), List(Wildcard), capture(results))
+    val wk6 = consume(store, List("ch1"), List(Wildcard), capture(results))
 
     val test = List(wk1, wk2, wk3, wk4, wk5, wk6)
 
     test.foreach(runKs)
 
-    dataAt(ns, List("hello")) shouldBe Nil
+    store.getAs(List("hello")) shouldBe Nil
     results shouldBe List(List("goodbye"), List("hello"), List("world"))
   }
 
-  "consume on multiple channels, produce" should "work" in withTestStorage { ns =>
+  "consume on multiple channels, produce" should "work" in withTestStorage { store =>
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    val wk1 = consume(ns, List("hello", "world"), List(Wildcard), capture(results))
-    val wk2 = produce(ns, "world", "This is some data")
+    val wk1 = consume(store, List("hello", "world"), List(Wildcard), capture(results))
+    val wk2 = produce(store, "world", "This is some data")
 
     val test = List(wk1, wk2)
 
     test.foreach(runKs)
 
-    dataAt(ns, List("world")) shouldBe Nil
+    store.getAs(List("world")) shouldBe Nil
     results.toList shouldBe List(List("This is some data"))
   }
 
-  "A match experiment" should "work" in withTestStorage { ns =>
+  "A match experiment" should "work" in withTestStorage { store =>
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    val wk1  = consume(ns, List("hello", "world"), List(StringMatch("This is some data")), capture(results))
-    val wk2  = produce(ns, "foo", "This is some data")
+    val wk1  = consume(store, List("hello", "world"), List(StringMatch("This is some data")), capture(results))
+    val wk2  = produce(store, "foo", "This is some data")
     val test = List(wk1, wk2)
 
     test.foreach(runKs)
 
-    dataAt(ns, List("hello", "world")) shouldBe Nil
-    dataAt(ns, List("foo")) shouldBe List("This is some data")
+    store.getAs(List("hello", "world")) shouldBe Nil
+    store.getAs(List("foo")) shouldBe List("This is some data")
   }
 
-  "Another match experiment" should "work" in withTestStorage { ns =>
+  "Another match experiment" should "work" in withTestStorage { store =>
     val results1: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
     val results2: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    val wk1  = consume(ns, List("hello"), List(StringMatch("This is some data")), capture(results1))
-    val wk2  = consume(ns, List("world"), List(StringMatch("This is some other data")), capture(results2))
-    val wk3  = produce(ns, "hello", "This is some data")
-    val wk4  = produce(ns, "world", "This is some other data")
+    val wk1  = consume(store, List("hello"), List(StringMatch("This is some data")), capture(results1))
+    val wk2  = consume(store, List("world"), List(StringMatch("This is some other data")), capture(results2))
+    val wk3  = produce(store, "hello", "This is some data")
+    val wk4  = produce(store, "world", "This is some other data")
     val test = List(wk1, wk2, wk3, wk4)
 
     test.foreach(runKs)
 
-    dataAt(ns, List("hello")) shouldBe Nil
-    dataAt(ns, List("world")) shouldBe Nil
+    store.getAs(List("hello")) shouldBe Nil
+    store.getAs(List("world")) shouldBe Nil
     results1.toList shouldBe List(List("This is some data"))
     results2.toList shouldBe List(List("This is some other data"))
   }
 
-  "consume on multiple channels, consume on a same channel, produce" should "work" in withTestStorage { ns =>
+  "consume on multiple channels, consume on a same channel, produce" should "work" in withTestStorage { store =>
     val results1: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
     val results2: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    val wk1  = consume(ns, List("hello", "goodbye"), List(Wildcard), capture(results1))
-    val wk2  = consume(ns, List("goodbye"), List(Wildcard), capture(results2))
-    val wk3  = produce(ns, "hello", "This is some data")
-    val wk4  = produce(ns, "goodbye", "This is some other data")
+    val wk1  = consume(store, List("hello", "goodbye"), List(Wildcard), capture(results1))
+    val wk2  = consume(store, List("goodbye"), List(Wildcard), capture(results2))
+    val wk3  = produce(store, "hello", "This is some data")
+    val wk4  = produce(store, "goodbye", "This is some other data")
     val test = List(wk1, wk2, wk3, wk4)
 
     test.foreach(runKs)
 
-    dataAt(ns, List("hello")) shouldBe Nil
-    dataAt(ns, List("goodbye")) shouldBe Nil
+    store.getAs(List("hello")) shouldBe Nil
+    store.getAs(List("goodbye")) shouldBe Nil
     results1.toList shouldBe List(List("This is some data"))
     results2.toList shouldBe List(List("This is some other data"))
   }
 
-  "consume on a channel, consume on same channel, produce" should "work" in withTestStorage { ns =>
+  "consume on a channel, consume on same channel, produce" should "work" in withTestStorage { store =>
     val results1: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
     val results2: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    val wk1  = consume(ns, List("hello"), List(Wildcard), capture(results1))
-    val wk2  = consume(ns, List("hello"), List(StringMatch("This is some data")), capture(results2))
-    val wk3  = produce(ns, "hello", "This is some data")
-    val wk4  = produce(ns, "hello", "This is some other data")
+    val wk1  = consume(store, List("hello"), List(Wildcard), capture(results1))
+    val wk2  = consume(store, List("hello"), List(StringMatch("This is some data")), capture(results2))
+    val wk3  = produce(store, "hello", "This is some data")
+    val wk4  = produce(store, "hello", "This is some other data")
     val test = List(wk1, wk2, wk3, wk4)
 
     test.foreach(runKs)
 
     results2.toList shouldBe List(List("This is some data"))
-    dataAt(ns, List("hello")) shouldBe List("This is some other data")
+    store.getAs(List("hello")) shouldBe List("This is some other data")
   }
 }

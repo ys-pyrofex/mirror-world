@@ -11,7 +11,7 @@ class Store[C, P, A, K] private (_keys: mutable.HashMap[String, List[C]],
                                  _k: mutable.HashMap[String, K],
                                  val joinMap: mutable.MultiMap[C, List[C]])(implicit sc: Serialize[C]) {
 
-  def hashC(cs: List[C])(implicit sc: Serialize[C]): String =
+  private def hashC(cs: List[C])(implicit sc: Serialize[C]): String =
     printHexBinary(hashBytes(cs.flatMap(sc.encode).toArray))
 
   private def putCs(channels: List[C]): Unit =

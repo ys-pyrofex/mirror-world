@@ -8,7 +8,5 @@ trait Matcher[A, B] {
 object Matcher {
 
   @SuppressWarnings(Array("org.wartremover.warts.Any"))
-  implicit object stringMatcher extends Matcher[Pattern, String] {
-    def isMatch(a: Pattern, b: String): Option[String] = Some(b).filter(a.isMatch)
-  }
+  implicit val stringMatcher: Matcher[Pattern, String] = (a: Pattern, b: String) => Some(b).filter(a.isMatch)
 }
