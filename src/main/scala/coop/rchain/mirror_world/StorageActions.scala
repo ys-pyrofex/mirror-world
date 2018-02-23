@@ -10,7 +10,7 @@ trait StorageActions {
       implicit m: Matcher[P, A]): Option[List[(A, C, Int)]] = {
     val options = cs.zip(ps).map {
       case (c, p) =>
-        val as: Seq[(A, Int)] = store.tuplespace.as(c.pure[List]).zipWithIndex
+        val as: Seq[(A, Int)] = store.tuplespace.getAs(c.pure[List]).zipWithIndex
         as.foldRight(None: Option[(A, C, Int)]) {
           case ((a, i), acc) =>
             m.isMatch(p, a) match {
@@ -27,9 +27,6 @@ trait StorageActions {
       case None =>
         store.tuplespace.putK(cs, ps, k)
         for (c <- cs) store.joinMap.addBinding(c, cs)
-        // 0 -> [0 1 2]
-        // 1 -> [0 1 2]
-        // 2 -> [0 1 2]
         None
       case Some(acis) =>
         acis.foreach {
@@ -37,11 +34,6 @@ trait StorageActions {
             store.tuplespace.removeA(c.pure[List], i)
             store.tuplespace.removeK(cs, i)
             ignore { store.joinMap.removeBinding(c, cs) }
-          // 0 -> [0 1 2], [0 4 5]
-          // 1 -> [0 1 2]
-          // 2 -> [0 1 2]
-          // 4 -> [0 4 5]
-          // 5 -> [0 4 5]
         }
         Some((k, acis.map(_._1)))
     }
@@ -71,11 +63,6 @@ trait StorageActions {
           case (_, c, i) =>
             store.tuplespace.removeA(c.pure[List], i)
             ignore { store.joinMap.remove(c) }
-            // 0 -> [0 1 2], [0 4 5]
-            // 1 -> [0 1 2]
-            // 2 -> [0 1 2]
-            // 4 -> [0 4 5]
-            // 5 -> [0 4 5]
             store.tuplespace.removeK(c.pure[List], i)
         }
         (k, acis.map(_._1))

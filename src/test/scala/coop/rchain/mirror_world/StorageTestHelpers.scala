@@ -23,7 +23,7 @@ trait StorageTestHelpers {
   }
 
   def dataAt[P, A, K](ns: Storage[Channel, P, A, K], channels: List[Channel]): List[A] =
-    ns.tuplespace.as(channels)
+    ns.tuplespace.getAs(channels)
 
   def runKs(t: Option[(Continuation[String], List[String])]): Unit =
     t match {
