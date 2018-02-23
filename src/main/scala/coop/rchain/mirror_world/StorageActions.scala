@@ -62,8 +62,8 @@ trait StorageActions {
         acis.foreach {
           case (_, c, i) =>
             store.removeA(c.pure[List], i)
-            ignore { store.joinMap.remove(c) }
             store.removeK(c.pure[List], i)
+            ignore { store.joinMap.remove(c) }
         }
         (k, acis.map(_._1))
     }
